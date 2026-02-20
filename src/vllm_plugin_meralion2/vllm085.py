@@ -1,33 +1,57 @@
 """Inference-only MERaLiON AudioLLM model compatible with HuggingFace weights."""
+
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, Optional, Set, Tuple, TypedDict, Union, List
+from typing import Any, Optional, Set, Tuple, Union, List
 
 import math
 import torch
 import torch.nn as nn
 from transformers import BatchFeature
-from transformers.models.whisper.feature_extraction_whisper import WhisperFeatureExtractor
+from transformers.models.whisper.feature_extraction_whisper import (
+    WhisperFeatureExtractor,
+)
 
 from vllm.config import VllmConfig
 from vllm.model_executor.sampling_metadata import SamplingMetadata
-from vllm.multimodal import MULTIMODAL_REGISTRY, MultiModalKwargs
-from vllm.multimodal.inputs import (MultiModalDataDict, MultiModalFieldConfig,
-                                    MultiModalKwargs)
-from vllm.multimodal.parse import (AudioProcessorItems, MultiModalDataItems,
-                                   MultiModalDataParser)
-from vllm.multimodal.processing import (BaseMultiModalProcessor,
-                                        BaseProcessingInfo, PromptReplacement,
-                                        PromptUpdate, PromptUpdateDetails)
+from vllm.multimodal import MULTIMODAL_REGISTRY
+from vllm.multimodal.inputs import (
+    MultiModalDataDict,
+    MultiModalFieldConfig,
+    MultiModalKwargs,
+)
+from vllm.multimodal.parse import (
+    AudioProcessorItems,
+    MultiModalDataItems,
+    MultiModalDataParser,
+)
+from vllm.multimodal.processing import (
+    BaseMultiModalProcessor,
+    BaseProcessingInfo,
+    PromptReplacement,
+    PromptUpdate,
+    PromptUpdateDetails,
+)
 from vllm.multimodal.profiling import BaseDummyInputsBuilder
 from vllm.sequence import IntermediateTensors
-from vllm.model_executor.models.interfaces import MultiModalEmbeddings, SupportsMultiModal, SupportsPP
-from vllm.model_executor.models.utils import (AutoWeightsLoader, init_vllm_registered_model,
-                    maybe_prefix, merge_multimodal_embeddings)
+from vllm.model_executor.models.interfaces import (
+    MultiModalEmbeddings,
+    SupportsMultiModal,
+    SupportsPP,
+)
+from vllm.model_executor.models.utils import (
+    AutoWeightsLoader,
+    init_vllm_registered_model,
+    maybe_prefix,
+    merge_multimodal_embeddings,
+)
 
 from .transformers_utils.processing_meralion2 import MERaLiON2Processor
 from .transformers_utils.configuration_meralion2 import MERaLiON2Config
-from .transformers_utils.modules import (autoset_attn_implementation_for_whisper,
-    MERaLiON2Inputs, MERaLiON2SpeechAudioAdaper)
+from .transformers_utils.modules import (
+    autoset_attn_implementation_for_whisper,
+    MERaLiON2Inputs,
+    MERaLiON2SpeechAudioAdaper,
+)
 
 
 class MERaLiON2ProcessingInfo(BaseProcessingInfo):
@@ -57,10 +81,9 @@ class MERaLiON2ProcessingInfo(BaseProcessingInfo):
 
     def get_supported_mm_limits(self) -> Mapping[str, Optional[int]]:
         return {"audio": None}
-    
 
-class MERaLiON2DummyInputsBuilder(
-        BaseDummyInputsBuilder[MERaLiON2ProcessingInfo]):
+
+class MERaLiON2DummyInputsBuilder(BaseDummyInputsBuilder[MERaLiON2ProcessingInfo]):
 
     def get_dummy_text(self, mm_counts: Mapping[str, int]) -> str:
         num_audios = mm_counts.get("audio", 0)
@@ -81,16 +104,14 @@ class MERaLiON2DummyInputsBuilder(
         # This is to specify the audio length
         num_chunk_limit = processor.number_chunk_limit
         sampling_rate = feature_extractor.sampling_rate
-        audio_len = num_chunk_limit * feature_extractor.chunk_length * sampling_rate 
+        audio_len = num_chunk_limit * feature_extractor.chunk_length * sampling_rate
         num_audios = mm_counts.get("audio", 0)
         return {
-            "audio":
-            self._get_dummy_audios(length=audio_len, num_audios=num_audios)
+            "audio": self._get_dummy_audios(length=audio_len, num_audios=num_audios)
         }
-    
 
-class MERaLiON2MultiModalProcessor(
-        BaseMultiModalProcessor[MERaLiON2ProcessingInfo]):
+
+class MERaLiON2MultiModalProcessor(BaseMultiModalProcessor[MERaLiON2ProcessingInfo]):
 
     def _get_data_parser(self) -> MultiModalDataParser:
         feature_extractor = self.info.get_feature_extractor()
@@ -133,7 +154,8 @@ class MERaLiON2MultiModalProcessor(
         else:
             # Fall back to single split (single audio or legacy processor)
             chunk_sizes = (
-                (results["input_ids"] == speech_token_id).sum(axis=1) // output_chunk_size
+                (results["input_ids"] == speech_token_id).sum(axis=1)
+                // output_chunk_size
             ).tolist()
 
         splitted_input_features = torch.split(
@@ -145,7 +167,7 @@ class MERaLiON2MultiModalProcessor(
         results["input_features"] = splitted_input_features
         results["feature_attention_mask"] = splitted_feature_attention_mask
         return results
-        
+
     def _get_mm_fields_config(
         self,
         hf_inputs: BatchFeature,
@@ -191,14 +213,14 @@ class MERaLiON2MultiModalProcessor(
                 replacement=get_replacement_meralion2_audio,
             )
         ]
-    
+
 
 @MULTIMODAL_REGISTRY.register_processor(
     MERaLiON2MultiModalProcessor,
     info=MERaLiON2ProcessingInfo,
-    dummy_inputs=MERaLiON2DummyInputsBuilder)
-class MERaLiON2ForConditionalGeneration(nn.Module, SupportsMultiModal,
-                                         SupportsPP):
+    dummy_inputs=MERaLiON2DummyInputsBuilder,
+)
+class MERaLiON2ForConditionalGeneration(nn.Module, SupportsMultiModal, SupportsPP):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
         super().__init__()
@@ -218,9 +240,7 @@ class MERaLiON2ForConditionalGeneration(nn.Module, SupportsMultiModal,
         self.speech_audio_adapter = MERaLiON2SpeechAudioAdaper(
             audio_hidden_size=config.speech_config.d_model,
             text_hidden_size=config.text_config.hidden_size,
-            speech_mlp_scale_factor=getattr(
-                config, "speech_mlp_scale_factor", 15
-            ),
+            speech_mlp_scale_factor=getattr(config, "speech_mlp_scale_factor", 15),
             speech_mlp_use_projection=getattr(
                 config, "speech_mlp_use_projection", True
             ),
@@ -236,7 +256,8 @@ class MERaLiON2ForConditionalGeneration(nn.Module, SupportsMultiModal,
         )
 
         self.make_empty_intermediate_tensors = (
-            self.text_decoder.make_empty_intermediate_tensors)
+            self.text_decoder.make_empty_intermediate_tensors
+        )
 
     def _validate_and_reshape_mm_tensor(
         self,
@@ -298,21 +319,25 @@ class MERaLiON2ForConditionalGeneration(nn.Module, SupportsMultiModal,
         Raises:
             ValueError: If input format is invalid.
         """
-        input_features = kwargs.pop('input_features', None)
-        feature_attention_mask = kwargs.pop('feature_attention_mask', None)
+        input_features = kwargs.pop("input_features", None)
+        feature_attention_mask = kwargs.pop("feature_attention_mask", None)
 
         if input_features is None:
             return None
         input_features = self._validate_and_reshape_mm_tensor(
-            input_features, 'input_features'
+            input_features, "input_features"
         )
         feature_attention_mask = self._validate_and_reshape_mm_tensor(
-            feature_attention_mask, 'feature_attention_mask')
+            feature_attention_mask, "feature_attention_mask"
+        )
         if not isinstance(input_features, (torch.Tensor, list)):
-            raise ValueError("Incorrect type of audio input features. "
-                             f"Got type: {type(input_features)}")
-        return MERaLiON2Inputs(input_features=input_features,
-                                feature_attention_mask=feature_attention_mask)
+            raise ValueError(
+                "Incorrect type of audio input features. "
+                f"Got type: {type(input_features)}"
+            )
+        return MERaLiON2Inputs(
+            input_features=input_features, feature_attention_mask=feature_attention_mask
+        )
 
     def _process_audio_input(
         self,
@@ -327,9 +352,7 @@ class MERaLiON2ForConditionalGeneration(nn.Module, SupportsMultiModal,
         Returns:
             Processed audio features tensor.
         """
-        input_features = audio_input["input_features"].to(
-            self.speech_encoder.dtype
-        )
+        input_features = audio_input["input_features"].to(self.speech_encoder.dtype)
         feature_attention_mask = audio_input["feature_attention_mask"]
 
         audio_outputs = self.speech_encoder(
@@ -342,36 +365,34 @@ class MERaLiON2ForConditionalGeneration(nn.Module, SupportsMultiModal,
         audio_features = audio_features.view(-1, audio_features.size(-1))
 
         return audio_features
-    
+
     def get_language_model(self) -> torch.nn.Module:
         return self.text_decoder
-    
+
     def get_multimodal_embeddings(
-            self, **kwargs: object) -> Optional[MultiModalEmbeddings]:
-        
+        self, **kwargs: object
+    ) -> Optional[MultiModalEmbeddings]:
+
         if "input_features" not in kwargs:
             return None
-        
+
         input_features = kwargs["input_features"]
-        audio_input = self._parse_and_validate_audio_input(**kwargs)        
+        audio_input = self._parse_and_validate_audio_input(**kwargs)
         if isinstance(input_features, torch.Tensor):
             input_features = list(input_features)
 
-        speech_mlp_scale_factor = getattr(
-            self.config, "speech_mlp_scale_factor", 15
-        )
-        
+        speech_mlp_scale_factor = getattr(self.config, "speech_mlp_scale_factor", 15)
+
         _multiplier = int(1500 / speech_mlp_scale_factor)
         audio_lengths = [
-            math.prod(audio.shape[:-2]) * _multiplier
-            for audio in input_features
+            math.prod(audio.shape[:-2]) * _multiplier for audio in input_features
         ]
-        
+
         # Validate audio_lengths sum matches processed features
         masked_audio_features = self._process_audio_input(audio_input)
         masked_audio_features = torch.split(masked_audio_features, audio_lengths)
         return masked_audio_features
-    
+
     def get_input_embeddings(
         self,
         input_ids: torch.Tensor,
@@ -380,8 +401,11 @@ class MERaLiON2ForConditionalGeneration(nn.Module, SupportsMultiModal,
         inputs_embeds = self.text_decoder.get_input_embeddings(input_ids)
         if multimodal_embeddings is not None:
             inputs_embeds = merge_multimodal_embeddings(
-                input_ids, inputs_embeds, multimodal_embeddings,
-                self.config.speech_token_index)
+                input_ids,
+                inputs_embeds,
+                multimodal_embeddings,
+                self.config.speech_token_index,
+            )
         return inputs_embeds
 
     def forward(
@@ -391,7 +415,7 @@ class MERaLiON2ForConditionalGeneration(nn.Module, SupportsMultiModal,
         intermediate_tensors: Optional[IntermediateTensors] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
         **kwargs: object,
-    ) -> Union[torch.Tensor, IntermediateTensors]:        
+    ) -> Union[torch.Tensor, IntermediateTensors]:
         if intermediate_tensors is not None:
             inputs_embeds = None
 
@@ -399,14 +423,12 @@ class MERaLiON2ForConditionalGeneration(nn.Module, SupportsMultiModal,
         # condition is for v0 compatibility.
         elif inputs_embeds is None:
             multimodal_embeddings = self.get_multimodal_embeddings(**kwargs)
-            inputs_embeds = self.get_input_embeddings(input_ids,
-                                                      multimodal_embeddings)
+            inputs_embeds = self.get_input_embeddings(input_ids, multimodal_embeddings)
             input_ids = None
 
-        hidden_states = self.text_decoder.model(input_ids,
-                                                  positions,
-                                                  intermediate_tensors,
-                                                  inputs_embeds=inputs_embeds)
+        hidden_states = self.text_decoder.model(
+            input_ids, positions, intermediate_tensors, inputs_embeds=inputs_embeds
+        )
         return hidden_states
 
     def compute_logits(
@@ -414,10 +436,8 @@ class MERaLiON2ForConditionalGeneration(nn.Module, SupportsMultiModal,
         hidden_states: torch.Tensor,
         sampling_metadata: SamplingMetadata,
     ) -> Optional[torch.Tensor]:
-        return self.text_decoder.compute_logits(hidden_states,
-                                                  sampling_metadata)
-    
-    def load_weights(self, weights: Iterable[Tuple[str,
-                                                   torch.Tensor]]) -> Set[str]:
+        return self.text_decoder.compute_logits(hidden_states, sampling_metadata)
+
+    def load_weights(self, weights: Iterable[Tuple[str, torch.Tensor]]) -> Set[str]:
         loader = AutoWeightsLoader(self)
         return loader.load_weights(weights)
