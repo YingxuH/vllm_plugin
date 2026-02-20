@@ -3,19 +3,19 @@ import torch
 import librosa
 
 from vllm import LLM, SamplingParams
-from vllm_plugin_meralion2 import NoRepeatNGramLogitsProcessor
 
 
 model_name = "MERaLiON/MERaLiON-2-10B"
 # model_name = "MERaLiON/MERaLiON-2-10B-ASR"
 # model_name = "MERaLiON/MERaLiON-2-3B"
 
-llm = LLM(model=model_name,
-          tokenizer=model_name,
-          limit_mm_per_prompt={"audio": 1},
-          trust_remote_code=True,
-          dtype=torch.bfloat16
-          )
+llm = LLM(
+    model=model_name,
+    tokenizer=model_name,
+    limit_mm_per_prompt={"audio": 1},
+    trust_remote_code=True,
+    dtype=torch.bfloat16
+)
 
 # change example.wav to your audio file.
 audio_array, sample_rate = librosa.load("example.wav", sr=16000)
@@ -27,14 +27,17 @@ prompt = (
     "<start_of_turn>model\n")
 
 sampling_params = SamplingParams(
-  temperature=0.0,
-  top_p=0.9,
-  top_k=50,
-  repetition_penalty=1.0,
-  seed=42,
-  max_tokens=1024,
-  stop_token_ids=None,
-  logits_processors=[NoRepeatNGramLogitsProcessor(6)]
+    temperature=0.0,
+    top_p=0.9,
+    top_k=50,
+    repetition_penalty=1.0,
+    seed=42,
+    max_tokens=1024,
+    stop_token_ids=None,
+    # vLLM V1 does not support per-request logits_processors.
+    # If you need NoRepeatNGramLogitsProcessor, run with V0 engine
+    # (e.g. set VLLM_USE_V1=0 before launching).
+    # logits_processors=[NoRepeatNGramLogitsProcessor(6)],
 )
 
 mm_data = {"audio": [(audio_array, sample_rate)]}

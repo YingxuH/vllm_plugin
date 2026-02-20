@@ -24,9 +24,9 @@ dependencies = [
 
 [project.urls]
 Modelpage = "https://huggingface.co/MERaLiON/MERaLiON-2-10B" 
-Homepage = "https://huggingface.co/MERaLiON/MERaLiON-2-10B/tree/main/vllm_plugin_meralion2"
-Documentation = "https://huggingface.co/MERaLiON/MERaLiON-2-10B/blob/main/vllm_plugin_meralion2/readme.md"
-Changelog = "https://huggingface.co/MERaLiON/MERaLiON-2-10B/blob/main/vllm_plugin_meralion2/CHANGELOG.md"
+Homepage = "https://github.com/YingxuH/vllm_plugin"
+Documentation = "https://github.com/YingxuH/vllm_plugin/blob/main/readme.md"
+Changelog = "https://github.com/YingxuH/vllm_plugin/blob/main/CHANGELOG.md"
 
 [project.entry-points."vllm.general_plugins"]
 register_dummy_model = "vllm_plugin_meralion2:register"

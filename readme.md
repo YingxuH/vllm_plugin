@@ -22,15 +22,15 @@ pip install flash-attn --no-build-isolation
 
 ### Offline Inference
 
-Refer to [offline_example.py](https://huggingface.co/MERaLiON/MERaLiON-2-10B/blob/main/vllm_plugin_meralion2/offline_example.py) for offline inference example.
+Refer to [offline_example.py](https://github.com/YingxuH/vllm_plugin/blob/main/example_scripts/offline_example.py) for offline inference example.
 
 ### OpenAI-compatible Serving
 
-Refer to [openai_serve_example.sh](https://huggingface.co/MERaLiON/MERaLiON-2-10B/blob/main/vllm_plugin_meralion2/openai_serve_example.sh) for openAI-compatible serving example.
+Refer to [openai_serve_example.sh](https://github.com/YingxuH/vllm_plugin/blob/main/example_scripts/openai_serve_example.sh) for openAI-compatible serving example.
 
-To call the server, you can refer to [openai_client_example.py](https://huggingface.co/MERaLiON/MERaLiON-2-10B/blob/main/vllm_plugin_meralion2/openai_client_example.py).
+To call the server, you can refer to [openai_client_example.py](https://github.com/YingxuH/vllm_plugin/blob/main/example_scripts/openai_client_example.py).
 
-Alternatively, you can try calling the server with curl, refer to [openai_client_curl.sh](https://huggingface.co/MERaLiON/MERaLiON-2-10B/blob/main/vllm_plugin_meralion2/openai_client_curl.sh).
+Alternatively, you can try calling the server with curl, refer to [openai_client_curl.sh](https://github.com/YingxuH/vllm_plugin/blob/main/example_scripts/openai_client_curl.sh).
 
 ### Changelog
 
@@ -40,4 +40,4 @@ Alternatively, you can try calling the server with curl, refer to [openai_client
 - Fixed server-side internal failure when multiple requests with different audio chunk counts are batched together.
 - Added more docstrings for better code readability and maintenance.
 
-Full history: see [CHANGELOG.md](./CHANGELOG.md).
+Full history: see [CHANGELOG.md](https://github.com/YingxuH/vllm_plugin/blob/main/CHANGELOG.md).
