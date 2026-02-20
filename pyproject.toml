@@ -37,3 +37,13 @@ where = ["src"]
 [tool.setuptools]
 package-dir = {"" = "src"}
 include-package-data = true
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+branch = "main"
+changelog_file = "CHANGELOG.md"
+build_command = "python3 -m build"
+allow_zero_version = true
+
+[tool.semantic_release.commit_parser_options]
+allowed_tags = ["feat", "fix", "perf", "refactor", "docs", "chore", "ci", "test"]
