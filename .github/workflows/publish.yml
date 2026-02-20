@@ -1,0 +1,39 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published] # This means: "Run whenever I click 'Publish Release' on GitHub"
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      # These two are the "Magic Keys" for Trusted Publishing + SLSA
+      id-token: write      # Required for PyPI to trust this run
+      contents: write      # Required to upload the proof (attestation)
+      attestations: write  # Required for SLSA provenance
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install tools
+        run: pip install build
+
+      - name: Build the package
+        run: python -m build
+
+      # This part creates the "SLSA Provenance" (the proof that it's safe)
+      - name: Generate SLSA provenance attestation
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: "dist/*"
+
+      # This part sends it to PyPI (No password needed!)
+      - name: Upload to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
