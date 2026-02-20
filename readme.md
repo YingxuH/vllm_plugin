@@ -1,5 +1,10 @@
 ## MERaLiON2 vLLM Plugin
 
+[![Security](https://github.com/YingxuH/vllm_plugin/actions/workflows/security.yml/badge.svg)](https://github.com/YingxuH/vllm_plugin/actions/workflows/security.yml)
+[![Publish](https://github.com/YingxuH/vllm_plugin/actions/workflows/publish.yml/badge.svg)](https://github.com/YingxuH/vllm_plugin/actions/workflows/publish.yml)
+[![CodeQL](https://github.com/YingxuH/vllm_plugin/actions/workflows/codeql.yml/badge.svg)](https://github.com/YingxuH/vllm_plugin/actions/workflows/codeql.yml)
+
+
 ### Licence
 
 [MERaLiON-Public-Licence-v3](https://huggingface.co/datasets/MERaLiON/MERaLiON_Public_Licence/blob/main/MERaLiON-Public-Licence-v3.pdf)
