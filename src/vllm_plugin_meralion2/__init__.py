@@ -5,7 +5,9 @@ from vllm.entrypoints.chat_utils import BaseMultiModalItemTracker
 from .transformers_utils.no_repeat_logits_processor import NoRepeatNGramLogitsProcessor
 
 
-_original_placeholder_str = BaseMultiModalItemTracker._placeholder_str
+_original_placeholder_str = getattr(
+    BaseMultiModalItemTracker, "_placeholder_str"
+)
 
 
 def custom_placeholder_str(
@@ -44,15 +46,15 @@ def register() -> None:
     from vllm import ModelRegistry
 
     v064_compatible_versions = [
-        '0.6.5',
-        '0.6.6',
-        '0.6.6.post1',
-        '0.7.0',
-        '0.7.1',
-        '0.7.2',
-        '0.7.3',
+        "0.6.5",
+        "0.6.6",
+        "0.6.6.post1",
+        "0.7.0",
+        "0.7.1",
+        "0.7.2",
+        "0.7.3",
     ]
-    v085_compatible_versions = ['0.8.5', '0.8.5.post1']
+    v085_compatible_versions = ["0.8.5", "0.8.5.post1"]
     sorted_compatible_versions = sorted(
         v064_compatible_versions + v085_compatible_versions
     )
@@ -67,15 +69,14 @@ def register() -> None:
             f"Supported vLLM versions: {', '.join(sorted_compatible_versions)}"
         )
 
-    if (
-        "MERaLiON2ForConditionalGeneration"
-        not in ModelRegistry.get_supported_archs()
-    ):
+    if "MERaLiON2ForConditionalGeneration" not in ModelRegistry.get_supported_archs():
         ModelRegistry.register_model(
             "MERaLiON2ForConditionalGeneration",
             MERaLiON2ForConditionalGeneration,
         )
 
-    vllm.entrypoints.chat_utils.BaseMultiModalItemTracker._placeholder_str = (
-        custom_placeholder_str
+    setattr(
+        vllm.entrypoints.chat_utils.BaseMultiModalItemTracker,
+        "_placeholder_str",
+        custom_placeholder_str,
     )

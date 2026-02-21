@@ -12,6 +12,8 @@ from transformers.utils.import_utils import (
 
 # === Audio Inputs === #
 class MERaLiON2Inputs(TypedDict):
+    """Typed dict for batched audio inputs to the MERaLiON2 speech encoder."""
+
     input_features: torch.Tensor
     """Shape: 
     `(num_audios, num_mel_bins, 3000)`
