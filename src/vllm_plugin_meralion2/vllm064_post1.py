@@ -382,6 +382,8 @@ def input_mapper_for_meralion(
 class MERaLiON2ForConditionalGeneration(
     nn.Module, SupportsMultiModal, SupportsLoRA, SupportsPP
 ):
+    """vLLM model implementation for MERaLiON2 with audio, text, and LoRA support."""
+
     packed_modules_mapping = {
         "qkv_proj": [
             "q_proj",

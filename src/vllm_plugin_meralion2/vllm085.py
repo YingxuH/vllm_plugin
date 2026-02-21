@@ -55,6 +55,7 @@ from .transformers_utils.modules import (
 
 
 class MERaLiON2ProcessingInfo(BaseProcessingInfo):
+    """Processing context for MERaLiON2: config, processor, and feature extractor access."""
 
     def get_hf_config(self):
         return self.ctx.get_hf_config(MERaLiON2Config)
@@ -84,6 +85,7 @@ class MERaLiON2ProcessingInfo(BaseProcessingInfo):
 
 
 class MERaLiON2DummyInputsBuilder(BaseDummyInputsBuilder[MERaLiON2ProcessingInfo]):
+    """Builds dummy text and multimodal inputs for MERaLiON2 profiling."""
 
     def get_dummy_text(self, mm_counts: Mapping[str, int]) -> str:
         num_audios = mm_counts.get("audio", 0)
@@ -112,6 +114,7 @@ class MERaLiON2DummyInputsBuilder(BaseDummyInputsBuilder[MERaLiON2ProcessingInfo
 
 
 class MERaLiON2MultiModalProcessor(BaseMultiModalProcessor[MERaLiON2ProcessingInfo]):
+    """Multi-modal processor for MERaLiON2: parses and encodes audio for the model."""
 
     def _get_data_parser(self) -> MultiModalDataParser:
         feature_extractor = self.info.get_feature_extractor()
@@ -221,6 +224,7 @@ class MERaLiON2MultiModalProcessor(BaseMultiModalProcessor[MERaLiON2ProcessingIn
     dummy_inputs=MERaLiON2DummyInputsBuilder,
 )
 class MERaLiON2ForConditionalGeneration(nn.Module, SupportsMultiModal, SupportsPP):
+    """vLLM model implementation for MERaLiON2 with audio and text support."""
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
         super().__init__()
