@@ -1,6 +1,6 @@
 """Inference-only MERaLiON AudioLLM model compatible with HuggingFace weights."""
 
-from typing import Any, Optional, Set, Tuple, TypedDict, Union, List
+from typing import TypedDict
 
 import torch
 import torch.nn as nn
