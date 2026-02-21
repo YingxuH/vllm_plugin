@@ -42,7 +42,7 @@ include-package-data = true
 version_toml = ["pyproject.toml:project.version"]
 branch = "main"
 changelog_file = "CHANGELOG.md"
-build_command = "python3 -m build"
+build_command = ""pip3 install build && python3 -m build""
 allow_zero_version = true
 
 [tool.semantic_release.commit_parser_options]
