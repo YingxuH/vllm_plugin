@@ -34,7 +34,7 @@ from test_utils import get_openai_client
 TTFT_P95_BUDGET_MS = 600
 ITL_P95_BUDGET_MS = 50
 DEFAULT_MAX_SAMPLES = 32
-DEFAULT_MAX_COMPLETION_TOKENS = 256
+DEFAULT_MAX_COMPLETION_TOKENS = 200
 
 
 def _get_int_env(name: str, default: int) -> int:

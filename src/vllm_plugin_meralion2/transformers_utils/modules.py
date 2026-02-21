@@ -1,9 +1,14 @@
 """Inference-only MERaLiON AudioLLM model compatible with HuggingFace weights."""
+
 from typing import Any, Optional, Set, Tuple, TypedDict, Union, List
 
 import torch
 import torch.nn as nn
-from transformers.utils.import_utils import is_torch_sdpa_available, is_flash_attn_2_available
+from transformers.utils.import_utils import (
+    is_torch_sdpa_available,
+    is_flash_attn_2_available,
+)
+
 
 # === Audio Inputs === #
 class MERaLiON2Inputs(TypedDict):
@@ -95,13 +100,12 @@ class MERaLiON2SpeechAudioAdaper(nn.Module):
         )
 
         if self.speech_mlp_use_projection:
-            speech_embeds = (
-                self.act_fn(self.gate_proj(speech_embeds))
-                * self.pool_proj(speech_embeds)
+            speech_embeds = self.act_fn(self.gate_proj(speech_embeds)) * self.pool_proj(
+                speech_embeds
             )
         speech_embeds = self.out_proj(speech_embeds)
         return speech_embeds
-    
+
 
 def autoset_attn_implementation_for_whisper(config) -> object:
     """Automatically set attention implementation for Whisper encoder.

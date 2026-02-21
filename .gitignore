@@ -3,4 +3,3 @@ build/
 dist/
 **/*.egg-info/
 **/.pytest_cache/
-private_scripts/

@@ -28,7 +28,9 @@ def _get_ngrams(ngram_size: int, prev_input_ids: torch.Tensor, num_hypos: int):
         # Loop through each n-gram of size ngram_size in the list of tokens (gen_tokens)
         for ngram in zip(*[gen_tokens[i:] for i in range(ngram_size)]):
             prev_ngram_tuple = tuple(ngram[:-1])
-            generated_ngram[prev_ngram_tuple] = generated_ngram.get(prev_ngram_tuple, []) + [ngram[-1]]
+            generated_ngram[prev_ngram_tuple] = generated_ngram.get(
+                prev_ngram_tuple, []
+            ) + [ngram[-1]]
     return generated_ngrams
 
 
@@ -64,7 +66,9 @@ def _calc_banned_ngram_tokens(
         return [[] for _ in range(num_hypos)]
     generated_ngrams = _get_ngrams(ngram_size, prev_input_ids, num_hypos)
     banned_tokens = [
-        _get_generated_ngrams(generated_ngrams[hypo_idx], prev_input_ids[hypo_idx], ngram_size, cur_len)
+        _get_generated_ngrams(
+            generated_ngrams[hypo_idx], prev_input_ids[hypo_idx], ngram_size, cur_len
+        )
         for hypo_idx in range(num_hypos)
     ]
     return banned_tokens
@@ -120,12 +124,10 @@ class NoRepeatNGramLogitsProcessor:
             scores = scores.reshape(1, -1)
 
         num_batch_hypotheses = scores.shape[0]
-        
-        input_ids_tensor = torch.LongTensor(input_ids).reshape(
-            num_batch_hypotheses, -1
-        )
+
+        input_ids_tensor = torch.LongTensor(input_ids).reshape(num_batch_hypotheses, -1)
         cur_len = input_ids_tensor.shape[-1]
-        
+
         scores_processed = scores.clone()
         banned_batch_tokens = _calc_banned_ngram_tokens(
             self.ngram_size,
@@ -133,7 +135,7 @@ class NoRepeatNGramLogitsProcessor:
             num_batch_hypotheses,
             cur_len,
         )
-        
+
         for i, banned_tokens in enumerate(banned_batch_tokens):
             scores_processed[i, banned_tokens] = -float("inf")
 
