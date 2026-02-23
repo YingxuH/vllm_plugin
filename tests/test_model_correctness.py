@@ -219,22 +219,20 @@ class TestModelCorrectness:
 class TestVersionCompatibility:
     """Test version-specific compatibility."""
 
-    def test_v0_engine_compatibility(self):
-        """Test compatibility with v0 engine (0.6.5-0.7.3)."""
-        from conftest import is_v0_engine
-        
-        if is_v0_engine():
-            # Test v0-specific functionality
+    def test_v1_08_09_engine_compatibility(self):
+        """Test compatibility with vLLM 0.8/0.9 lane."""
+        from conftest import is_v1_08_09_engine
+
+        if is_v1_08_09_engine():
             register()
             supported_archs = ModelRegistry.get_supported_archs()
             assert "MERaLiON2ForConditionalGeneration" in supported_archs
 
-    def test_v1_engine_compatibility(self):
-        """Test compatibility with v1 engine (0.8.5-0.8.5.post1)."""
-        from conftest import is_v1_engine
-        
-        if is_v1_engine():
-            # Test v1-specific functionality
+    def test_v1_010_engine_compatibility(self):
+        """Test compatibility with vLLM 0.10 lane."""
+        from conftest import is_v1_010_engine
+
+        if is_v1_010_engine():
             register()
             supported_archs = ModelRegistry.get_supported_archs()
             assert "MERaLiON2ForConditionalGeneration" in supported_archs

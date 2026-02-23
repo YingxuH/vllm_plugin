@@ -1,6 +1,7 @@
 """Tests for version compatibility across different vLLM versions."""
 import pytest
 import vllm
+from packaging.version import Version
 
 from vllm import ModelRegistry
 from vllm_plugin_meralion2 import register
@@ -16,40 +17,16 @@ class TestVersionCompatibility:
 
     def test_current_version_supported(self):
         """Test that current vLLM version is supported."""
-        current_version = vllm.__version__
-        
-        v0_versions = [
-            '0.6.5', '0.6.6', '0.6.6.post1',
-            '0.7.0', '0.7.1', '0.7.2', '0.7.3'
-        ]
-        v1_versions = ['0.8.5', '0.8.5.post1']
-        
-        supported_versions = v0_versions + v1_versions
-        
-        assert current_version in supported_versions, (
+        current_version = Version(vllm.__version__)
+        assert Version("0.8.5") <= current_version < Version("0.11.0"), (
             f"vLLM version {current_version} is not supported. "
-            f"Supported versions: {supported_versions}"
+            "Supported versions: >=0.8.5,<0.11.0"
         )
 
-    def test_v0_versions_supported(self):
-        """Test that v0 engine versions are supported."""
-        v0_versions = [
-            '0.6.5', '0.6.6', '0.6.6.post1',
-            '0.7.0', '0.7.1', '0.7.2', '0.7.3'
-        ]
-        
-        current_version = vllm.__version__
-        if current_version in v0_versions:
-            register()
-            supported_archs = ModelRegistry.get_supported_archs()
-            assert "MERaLiON2ForConditionalGeneration" in supported_archs
-
-    def test_v1_versions_supported(self):
-        """Test that v1 engine versions are supported."""
-        v1_versions = ['0.8.5', '0.8.5.post1']
-        
-        current_version = vllm.__version__
-        if current_version in v1_versions:
+    def test_supported_range_registration(self):
+        """Test registration works for supported semver range."""
+        current_version = Version(vllm.__version__)
+        if Version("0.8.5") <= current_version < Version("0.11.0"):
             register()
             supported_archs = ModelRegistry.get_supported_archs()
             assert "MERaLiON2ForConditionalGeneration" in supported_archs
@@ -59,16 +36,8 @@ class TestVersionCompatibility:
         # This test verifies the error handling in register()
         # We can't easily test unsupported versions without mocking,
         # but we verify the registration works for supported versions
-        current_version = vllm.__version__
-        
-        v0_versions = [
-            '0.6.5', '0.6.6', '0.6.6.post1',
-            '0.7.0', '0.7.1', '0.7.2', '0.7.3'
-        ]
-        v1_versions = ['0.8.5', '0.8.5.post1']
-        supported_versions = v0_versions + v1_versions
-        
-        if current_version in supported_versions:
+        current_version = Version(vllm.__version__)
+        if Version("0.8.5") <= current_version < Version("0.11.0"):
             # Should not raise error
             try:
                 register()
@@ -79,32 +48,21 @@ class TestVersionCompatibility:
 
     def test_model_class_import_by_version(self):
         """Test that correct model class is imported based on version."""
-        current_version = vllm.__version__
-        
-        v0_versions = [
-            '0.6.5', '0.6.6', '0.6.6.post1',
-            '0.7.0', '0.7.1', '0.7.2', '0.7.3'
-        ]
-        v1_versions = ['0.8.5', '0.8.5.post1']
-        
+        current_version = Version(vllm.__version__)
         register()
-        
+
         # Verify registration
         supported_archs = ModelRegistry.get_supported_archs()
         assert "MERaLiON2ForConditionalGeneration" in supported_archs
-        
+
         # Try to verify the correct module is imported
         try:
             model_cls = ModelRegistry._try_load_model_cls("MERaLiON2ForConditionalGeneration")
-            
-            if current_version in v0_versions:
-                # V0 engine - should import from vllm064_post1
-                from vllm_plugin_meralion2.vllm064_post1 import MERaLiON2ForConditionalGeneration as V0Model
-                assert model_cls.__name__ == V0Model.__name__
-            elif current_version in v1_versions:
-                # V1 engine - should import from vllm085
-                from vllm_plugin_meralion2.vllm085 import MERaLiON2ForConditionalGeneration as V1Model
-                assert model_cls.__name__ == V1Model.__name__
+
+            if Version("0.8.5") <= current_version < Version("0.10.0"):
+                assert model_cls.__module__.endswith("vllm085")
+            elif Version("0.10.0") <= current_version < Version("0.11.0"):
+                assert model_cls.__module__.endswith("vllm010")
         except Exception:
             # If loading fails, at least verify registration
             assert "MERaLiON2ForConditionalGeneration" in supported_archs
