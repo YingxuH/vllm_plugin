@@ -1,12 +1,14 @@
-from typing import Optional
+from typing import Callable, Optional, cast
 
+from packaging.version import Version
 from vllm.entrypoints.chat_utils import BaseMultiModalItemTracker
 
 from .transformers_utils.no_repeat_logits_processor import NoRepeatNGramLogitsProcessor
 
 
-_original_placeholder_str = getattr(
-    BaseMultiModalItemTracker, "_placeholder_str"
+_PLACEHOLDER_ATTR = "_placeholder_str"
+_original_placeholder_str: Optional[Callable[..., Optional[str]]] = getattr(
+    BaseMultiModalItemTracker, _PLACEHOLDER_ATTR, None
 )
 
 
@@ -30,7 +32,13 @@ def custom_placeholder_str(
     if modality == "audio" and model_type == "meralion2":
         return "<SpeechHere>"
 
-    return _original_placeholder_str(
+    if _original_placeholder_str is None:
+        return None
+
+    original_placeholder_str = cast(
+        Callable[..., Optional[str]], _original_placeholder_str
+    )
+    return original_placeholder_str(
         self, modality=modality, current_count=current_count
     )
 
@@ -42,32 +50,28 @@ def register() -> None:
         RuntimeError: If vLLM version is not supported.
         ImportError: If required modules cannot be imported.
     """
+    from importlib import import_module
+
     import vllm
     from vllm import ModelRegistry
 
-    v064_compatible_versions = [
-        "0.6.5",
-        "0.6.6",
-        "0.6.6.post1",
-        "0.7.0",
-        "0.7.1",
-        "0.7.2",
-        "0.7.3",
-    ]
-    v085_compatible_versions = ["0.8.5", "0.8.5.post1"]
-    sorted_compatible_versions = sorted(
-        v064_compatible_versions + v085_compatible_versions
-    )
+    current_version = Version(vllm.__version__)
+    min_supported_version = Version("0.8.5")
+    v010_boundary = Version("0.10.0")
+    max_supported_version = Version("0.11.0")
 
-    if vllm.__version__ in v064_compatible_versions:
-        from .vllm064_post1 import MERaLiON2ForConditionalGeneration
-    elif vllm.__version__ in v085_compatible_versions:
-        from .vllm085 import MERaLiON2ForConditionalGeneration
+    if min_supported_version <= current_version < v010_boundary:
+        module = import_module("vllm_plugin_meralion2.vllm085")
+    elif v010_boundary <= current_version < max_supported_version:
+        module = import_module("vllm_plugin_meralion2.vllm010")
     else:
         raise RuntimeError(
             f"MERaLiON2 doesn't support vLLM version {vllm.__version__}. "
-            f"Supported vLLM versions: {', '.join(sorted_compatible_versions)}"
+            f"Supported vLLM versions: >= {min_supported_version}, < {max_supported_version}"
         )
+    MERaLiON2ForConditionalGeneration = getattr(
+        module, "MERaLiON2ForConditionalGeneration"
+    )
 
     if "MERaLiON2ForConditionalGeneration" not in ModelRegistry.get_supported_archs():
         ModelRegistry.register_model(
@@ -75,8 +79,13 @@ def register() -> None:
             MERaLiON2ForConditionalGeneration,
         )
 
-    setattr(
-        vllm.entrypoints.chat_utils.BaseMultiModalItemTracker,
-        "_placeholder_str",
-        custom_placeholder_str,
-    )
+    # vLLM internals changed across versions; patch only when the target
+    # attribute exists to avoid import-time/plugin-load failures.
+    if hasattr(
+        vllm.entrypoints.chat_utils.BaseMultiModalItemTracker, _PLACEHOLDER_ATTR
+    ):
+        setattr(
+            vllm.entrypoints.chat_utils.BaseMultiModalItemTracker,
+            _PLACEHOLDER_ATTR,
+            custom_placeholder_str,
+        )
