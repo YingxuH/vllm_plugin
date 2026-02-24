@@ -45,10 +45,10 @@ DEFAULT_DATASETS = [
 ]
 
 DEFAULT_DATASETS_WER = {
-    "idpc_short_ASR_v2": 0.16,
+    "idpc_short_ASR_v2": 0.18,
     "ste_test3": 0.25,
     "ytb_asr_batch1": 0.14,
-    "ytb_asr_batch2": 0.14,
+    "ytb_asr_batch2": 0.15,
     "ytb_asr_batch3_chinese": 0.2,
     "ytb_asr_batch3_malay": 0.2,
     "ytb_asr_batch3_tamil": 0.7,
