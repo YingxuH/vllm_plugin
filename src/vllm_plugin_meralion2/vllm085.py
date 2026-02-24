@@ -78,7 +78,11 @@ class MERaLiON2ProcessingInfo(BaseProcessingInfo):
         """Return the underlying Whisper feature extractor for audio processing."""
         hf_processor = self.get_hf_processor(sampling_rate=sampling_rate)
         feature_extractor = hf_processor.feature_extractor  # type: ignore
-        assert isinstance(feature_extractor, WhisperFeatureExtractor)
+        if not isinstance(feature_extractor, WhisperFeatureExtractor):
+            raise TypeError(
+                "Expected WhisperFeatureExtractor from hf_processor.feature_extractor, "
+                f"got {type(feature_extractor)}"
+            )
         return feature_extractor
 
     def get_supported_mm_limits(self) -> Mapping[str, Optional[int]]:
