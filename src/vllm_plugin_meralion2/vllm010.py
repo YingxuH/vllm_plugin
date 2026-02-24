@@ -9,4 +9,3 @@ from .vllm085 import (  # noqa: F401
 
 class MERaLiON2ForConditionalGeneration(_MERaLiON2ForConditionalGeneration085):
     """vLLM 0.10.x adapter class for MERaLiON2."""
-

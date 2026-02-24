@@ -1,3 +1,5 @@
+"""No-repeat n-gram logits processor used by MERaLiON2 generation."""
+
 from typing import Iterable, List
 
 import torch
@@ -125,7 +127,9 @@ class NoRepeatNGramLogitsProcessor:
 
         num_batch_hypotheses = scores.shape[0]
 
-        input_ids_tensor = torch.LongTensor(input_ids).reshape(num_batch_hypotheses, -1)
+        input_ids_tensor = torch.LongTensor(input_ids).reshape(
+            num_batch_hypotheses, -1
+        )
         cur_len = input_ids_tensor.shape[-1]
 
         scores_processed = scores.clone()
