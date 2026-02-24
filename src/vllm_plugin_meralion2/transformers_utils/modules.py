@@ -4,10 +4,8 @@ from typing import TypedDict
 
 import torch
 import torch.nn as nn
-from transformers.utils.import_utils import (
-    is_torch_sdpa_available,
-    is_flash_attn_2_available,
-)
+from transformers.utils import import_utils as hf_import_utils
+from transformers.utils.import_utils import is_flash_attn_2_available
 
 
 # === Audio Inputs === #
@@ -121,10 +119,25 @@ def autoset_attn_implementation_for_whisper(config) -> object:
         Modified configuration object.
     """
     _implementation = "eager"
-    if is_torch_sdpa_available():
+    sdpa_available = _is_torch_sdpa_available()
+
+    if sdpa_available:
         _implementation = "sdpa"
     if is_flash_attn_2_available():
         _implementation = "flash_attention_2"
 
     config._attn_implementation = _implementation
     return config
+
+
+def _is_torch_sdpa_available() -> bool:
+    """Return whether torch scaled dot-product attention is available.
+
+    Uses the HuggingFace helper when present (transformers 4.x) and falls
+    back to checking torch directly when the helper is removed (transformers 5.x).
+    """
+    hf_sdpa_checker = getattr(hf_import_utils, "is_torch_sdpa_available", None)
+    if callable(hf_sdpa_checker):
+        return bool(hf_sdpa_checker())
+
+    return hasattr(torch.nn.functional, "scaled_dot_product_attention")
