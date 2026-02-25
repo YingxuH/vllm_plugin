@@ -75,9 +75,14 @@ class MERaLiON2ProcessingInfo(BaseProcessingInfo):
         # Ignored in initialization
         sampling_rate: Optional[int] = None,
     ) -> WhisperFeatureExtractor:
+        """Return the underlying Whisper feature extractor for audio processing."""
         hf_processor = self.get_hf_processor(sampling_rate=sampling_rate)
         feature_extractor = hf_processor.feature_extractor  # type: ignore
-        assert isinstance(feature_extractor, WhisperFeatureExtractor)
+        if not isinstance(feature_extractor, WhisperFeatureExtractor):
+            raise TypeError(
+                "Expected WhisperFeatureExtractor from hf_processor.feature_extractor, "
+                f"got {type(feature_extractor)}"
+            )
         return feature_extractor
 
     def get_supported_mm_limits(self) -> Mapping[str, Optional[int]]:
@@ -373,6 +378,7 @@ class MERaLiON2ForConditionalGeneration(nn.Module, SupportsMultiModal, SupportsP
         return audio_features
 
     def get_language_model(self) -> torch.nn.Module:
+        """Expose the text decoder used for language-model operations."""
         return self.text_decoder
 
     def get_multimodal_embeddings(
@@ -442,8 +448,10 @@ class MERaLiON2ForConditionalGeneration(nn.Module, SupportsMultiModal, SupportsP
         hidden_states: torch.Tensor,
         sampling_metadata: SamplingMetadata,
     ) -> Optional[torch.Tensor]:
+        """Compute token logits from decoder hidden states."""
         return self.text_decoder.compute_logits(hidden_states, sampling_metadata)
 
     def load_weights(self, weights: Iterable[Tuple[str, torch.Tensor]]) -> Set[str]:
+        """Load model weights and return the set of loaded parameter names."""
         loader = AutoWeightsLoader(self)
         return loader.load_weights(weights)

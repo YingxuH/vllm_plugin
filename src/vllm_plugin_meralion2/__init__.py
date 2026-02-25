@@ -1,3 +1,5 @@
+"""vLLM plugin entrypoint and registration for MERaLiON2 models."""
+
 from typing import Callable, Optional, cast
 
 from packaging.version import Version
@@ -7,7 +9,7 @@ from .transformers_utils.no_repeat_logits_processor import NoRepeatNGramLogitsPr
 
 
 _PLACEHOLDER_ATTR = "_placeholder_str"
-_original_placeholder_str: Optional[Callable[..., Optional[str]]] = getattr(
+_ORIGINAL_PLACEHOLDER_STR: Optional[Callable[..., Optional[str]]] = getattr(
     BaseMultiModalItemTracker, _PLACEHOLDER_ATTR, None
 )
 
@@ -32,13 +34,11 @@ def custom_placeholder_str(
     if modality == "audio" and model_type == "meralion2":
         return "<SpeechHere>"
 
-    if _original_placeholder_str is None:
+    if not callable(_ORIGINAL_PLACEHOLDER_STR):
         return None
 
-    original_placeholder_str = cast(
-        Callable[..., Optional[str]], _original_placeholder_str
-    )
-    return original_placeholder_str(
+    placeholder_callback = cast(Callable[..., Optional[str]], _ORIGINAL_PLACEHOLDER_STR)
+    return placeholder_callback(  # pylint: disable=not-callable
         self, modality=modality, current_count=current_count
     )
 
@@ -69,14 +69,14 @@ def register() -> None:
             f"MERaLiON2 doesn't support vLLM version {vllm.__version__}. "
             f"Supported vLLM versions: >= {min_supported_version}, < {max_supported_version}"
         )
-    MERaLiON2ForConditionalGeneration = getattr(
+    meralion2_model_cls = getattr(
         module, "MERaLiON2ForConditionalGeneration"
     )
 
     if "MERaLiON2ForConditionalGeneration" not in ModelRegistry.get_supported_archs():
         ModelRegistry.register_model(
             "MERaLiON2ForConditionalGeneration",
-            MERaLiON2ForConditionalGeneration,
+            meralion2_model_cls,
         )
 
     # vLLM internals changed across versions; patch only when the target
