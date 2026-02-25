@@ -1,7 +1,7 @@
 """Shared fixtures for MERaLiON2 vLLM plugin tests."""
 import numpy as np
 import pytest
-from typing import Generator
+from packaging.version import Version
 
 # Audio test fixtures
 @pytest.fixture
@@ -53,17 +53,26 @@ def get_vllm_version() -> str:
 
 
 def is_v0_engine() -> bool:
-    """Check if using v0 engine (0.6.5-0.7.3)."""
-    version = get_vllm_version()
-    v0_versions = ['0.6.5', '0.6.6', '0.6.6.post1', '0.7.0', '0.7.1', '0.7.2', '0.7.3']
-    return version in v0_versions
+    """Legacy helper retained for backwards compatibility in tests."""
+    return False
 
 
 def is_v1_engine() -> bool:
-    """Check if using v1 engine (0.8.5-0.8.5.post1)."""
-    version = get_vllm_version()
-    v1_versions = ['0.8.5', '0.8.5.post1']
-    return version in v1_versions
+    """Check if using supported V1 range for this plugin."""
+    version = Version(get_vllm_version())
+    return Version("0.8.5") <= version < Version("0.11.0")
+
+
+def is_v1_08_09_engine() -> bool:
+    """Check if using vLLM 0.8/0.9 compatibility lane."""
+    version = Version(get_vllm_version())
+    return Version("0.8.5") <= version < Version("0.10.0")
+
+
+def is_v1_010_engine() -> bool:
+    """Check if using vLLM 0.10 compatibility lane."""
+    version = Version(get_vllm_version())
+    return Version("0.10.0") <= version < Version("0.11.0")
 
 
 @pytest.fixture
@@ -74,9 +83,5 @@ def vllm_version() -> str:
 
 @pytest.fixture
 def supported_vllm_versions() -> list[str]:
-    """Get list of supported vLLM versions."""
-    return [
-        '0.6.5', '0.6.6', '0.6.6.post1',
-        '0.7.0', '0.7.1', '0.7.2', '0.7.3',
-        '0.8.5', '0.8.5.post1'
-    ]
+    """Get supported vLLM range represented as a list entry."""
+    return [">=0.8.5,<0.11.0"]

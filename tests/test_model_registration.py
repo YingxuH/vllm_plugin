@@ -1,6 +1,6 @@
 """Tests for MERaLiON2 model registration with vLLM."""
-import pytest
 import vllm
+from packaging.version import Version
 from vllm import ModelRegistry
 
 from vllm_plugin_meralion2 import register
@@ -19,11 +19,11 @@ class TestModelRegistration:
         assert "MERaLiON2ForConditionalGeneration" in supported_archs
 
     def test_supported_vllm_versions(self, supported_vllm_versions):
-        """Test that the plugin supports the expected vLLM versions."""
-        current_version = vllm.__version__
-        assert current_version in supported_vllm_versions, (
-            f"vLLM version {current_version} is not in supported versions: "
-            f"{supported_vllm_versions}"
+        """Test that the plugin supports the expected vLLM semver range."""
+        current_version = Version(vllm.__version__)
+        assert Version("0.8.5") <= current_version < Version("0.11.0"), (
+            f"vLLM version {current_version} is outside supported range "
+            f"{supported_vllm_versions[0]}"
         )
 
     def test_model_registry_contains_meralion2(self):
@@ -46,7 +46,7 @@ class TestModelRegistration:
         assert "MERaLiON2ForConditionalGeneration" in supported_archs_1
         assert "MERaLiON2ForConditionalGeneration" in supported_archs_2
 
-    def test_model_class_import(self, vllm_version):
+    def test_model_class_import(self):
         """Test that the correct model class is imported based on vLLM version."""
         register()
         

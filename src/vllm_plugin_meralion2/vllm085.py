@@ -125,6 +125,7 @@ class MERaLiON2MultiModalProcessor(BaseMultiModalProcessor[MERaLiON2ProcessingIn
         prompt: str,
         mm_data: Mapping[str, object],
         mm_kwargs: Mapping[str, Any],
+        **kwargs,
     ) -> BatchFeature:
         # Text-only input not supported in composite processor
         if not mm_data.get("audios", []):
@@ -146,6 +147,7 @@ class MERaLiON2MultiModalProcessor(BaseMultiModalProcessor[MERaLiON2ProcessingIn
             prompt=prompt,
             mm_data=mm_data,
             mm_kwargs=mm_kwargs,
+            **kwargs,
         )
 
         # Multi-round audio: use audio_number_chunks from processor if available

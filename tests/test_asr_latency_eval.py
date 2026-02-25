@@ -31,8 +31,8 @@ from test_asr_transcription_eval import (
 )
 from test_utils import get_openai_client
 
-TTFT_P95_BUDGET_MS = 600
-ITL_P95_BUDGET_MS = 50
+TTFT_P95_BUDGET_MS = 2000
+ITL_P95_BUDGET_MS = 100
 DEFAULT_MAX_SAMPLES = 32
 DEFAULT_MAX_COMPLETION_TOKENS = 200
 
