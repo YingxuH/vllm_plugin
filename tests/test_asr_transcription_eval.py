@@ -32,7 +32,7 @@ PROMPT_TEMPLATE = (
 )
 
 DEFAULT_PRIVATE_DATA_ROOT = "/home/yingxu/private_data"
-MAX_WORKERS = 16
+MAX_WORKERS = 24
 ASR_CHUNK_SECONDS = 30.0
 DEFAULT_DATASETS = [
     "idpc_short_ASR_v2",
