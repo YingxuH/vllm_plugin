@@ -15,8 +15,9 @@
 
 This plugin family has two release lines:
 
-- `v0.1.x`: compatibility lane for vLLM version `0.6.5` ~ `0.7.3` (V0 engine), and `0.8.5` ~ `0.8.5.post1` (V1 engine). 
+- `v0.1.x`: compatibility lane for vLLM version `0.6.5` ~ `0.7.3` (V0 engine), and `0.8.5` ~ `0.8.5.post1` (V1 engine).
 - `v0.2.x`: compatibility lane for `vLLM >=0.8.5,<=0.10.0`. Refer to [matrix_summary.md](https://github.com/YingxuH/vllm_plugin/blob/main/matrix_summary.md) for detailed vLLM + transformers compatibility.
+- `v0.3.x`: compatibility lane for `vLLM >=0.10.1,<0.17.0`. Targets the V1 engine and handles all internal API changes across the 0.10–0.13 minor series. Refer to [matrix_summary.md](https://github.com/YingxuH/vllm_plugin/blob/main/matrix_summary.md) for detailed vLLM + transformers compatibility.
 
 Install by your vLLM version:
 
@@ -26,6 +27,9 @@ pip install "vllm-plugin-meralion2<0.2"
 
 # For vLLM 0.8.5 ~ 0.10.0
 pip install "vllm-plugin-meralion2>=0.2,<0.3"
+
+# For vLLM 0.10.1 ~ 0.16.x
+pip install "vllm-plugin-meralion2>=0.3,<0.4"
 ```
 
 It's strongly recommended to install flash-attn for better memory and gpu utilization. 

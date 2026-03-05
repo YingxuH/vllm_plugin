@@ -21,7 +21,7 @@ class TestModelRegistration:
     def test_supported_vllm_versions(self, supported_vllm_versions):
         """Test that the plugin supports the expected vLLM semver range."""
         current_version = Version(vllm.__version__)
-        assert Version("0.8.5") <= current_version < Version("0.11.0"), (
+        assert Version("0.10.1") <= current_version < Version("0.17.0"), (
             f"vLLM version {current_version} is outside supported range "
             f"{supported_vllm_versions[0]}"
         )
