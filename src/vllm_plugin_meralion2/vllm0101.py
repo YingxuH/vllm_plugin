@@ -30,7 +30,10 @@ from vllm.multimodal.processing import (
     PromptUpdate,
     PromptUpdateDetails,
 )
-from vllm.multimodal.profiling import BaseDummyInputsBuilder
+try:
+    from vllm.multimodal.processing import BaseDummyInputsBuilder  # vLLM >= 0.16.0
+except ImportError:
+    from vllm.multimodal.profiling import BaseDummyInputsBuilder  # vLLM 0.12.0–0.15.x
 from vllm.sequence import IntermediateTensors
 from vllm.model_executor.models.interfaces import (
     MultiModalEmbeddings,
