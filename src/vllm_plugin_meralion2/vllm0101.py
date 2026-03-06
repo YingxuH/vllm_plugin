@@ -1,19 +1,4 @@
-"""Inference-only MERaLiON AudioLLM model for vLLM >= 0.10.1.
-
-API compatibility notes
------------------------
-* vLLM 0.10.1 – 0.11.x: ``merge_multimodal_embeddings`` still available;
-  ``SamplingMetadata`` still lives in ``vllm.model_executor.sampling_metadata``.
-* vLLM 0.12.0: ``merge_multimodal_embeddings`` removed (public symbol);
-  ``get_multimodal_embeddings`` deprecated → ``embed_multimodal`` preferred.
-* vLLM 0.13.0+: ``get_multimodal_embeddings`` fallback completely removed;
-  model *must* implement ``embed_multimodal``.
-  ``SamplingMetadata`` moved out of ``vllm.model_executor``; V1 always passes
-  ``None`` for that argument anyway.
-
-All of these are handled below with try/except imports and the unified
-``embed_multimodal`` method name.
-"""
+"""Inference-only MERaLiON AudioLLM model for vLLM >= 0.12.0."""
 
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, List, Optional, Set, Tuple, Union
@@ -58,15 +43,6 @@ from vllm.model_executor.models.utils import (
     maybe_prefix,
 )
 
-# merge_multimodal_embeddings (token-ID-based) was removed in vLLM 0.12.0.
-# It is only exercised in the V0 engine fallback path inside get_input_embeddings,
-# which the V1 engine (default since 0.8.0) never reaches.
-try:
-    from vllm.model_executor.models.utils import (
-        merge_multimodal_embeddings as _legacy_merge_multimodal_embeddings,
-    )
-except ImportError:
-    _legacy_merge_multimodal_embeddings = None  # type: ignore[assignment]
 
 from .transformers_utils.processing_meralion2 import MERaLiON2Processor
 from .transformers_utils.configuration_meralion2 import MERaLiON2Config
@@ -127,6 +103,7 @@ class MERaLiON2DummyInputsBuilder(BaseDummyInputsBuilder[MERaLiON2ProcessingInfo
         self,
         seq_len: int,
         mm_counts: Mapping[str, int],
+        mm_options: Optional[Mapping[str, Any]] = None,  # added vLLM 0.12.0
     ) -> MultiModalDataDict:
         processor = self.info.get_hf_processor()
         feature_extractor = self.info.get_feature_extractor()
@@ -377,13 +354,7 @@ class MERaLiON2ForConditionalGeneration(nn.Module, SupportsMultiModal, SupportsP
     def embed_multimodal(
         self, **kwargs: object
     ) -> Optional[MultiModalEmbeddings]:
-        """Generate audio embeddings from multimodal kwargs.
-
-        Named ``embed_multimodal`` to satisfy the ``SupportsMultiModal``
-        interface required from vLLM 0.13.0 onwards (the older
-        ``get_multimodal_embeddings`` name was deprecated in 0.12.0 and
-        removed in 0.13.0).
-        """
+        """Generate audio embeddings from multimodal kwargs."""
         if "input_features" not in kwargs:
             return None
 
@@ -408,25 +379,7 @@ class MERaLiON2ForConditionalGeneration(nn.Module, SupportsMultiModal, SupportsP
         input_ids: torch.Tensor,
         multimodal_embeddings: Optional[MultiModalEmbeddings] = None,
     ) -> torch.Tensor:
-        """Merge text and audio embeddings.
-
-        In V1 (the default engine from vLLM 0.8.0 onwards) ``inputs_embeds``
-        is computed by the model runner before ``forward`` is called, so this
-        method is only reached on the legacy V0 code path.  The
-        ``_legacy_merge_multimodal_embeddings`` helper is ``None`` on
-        vLLM >= 0.12.0 where the public symbol was removed; in that case the
-        V0 path is not supported and a plain text embedding is returned.
-        """
-        inputs_embeds = self.text_decoder.get_input_embeddings(input_ids)
-        if multimodal_embeddings is not None:
-            if _legacy_merge_multimodal_embeddings is not None:
-                inputs_embeds = _legacy_merge_multimodal_embeddings(
-                    input_ids,
-                    inputs_embeds,
-                    multimodal_embeddings,
-                    self.config.speech_token_index,
-                )
-        return inputs_embeds
+        return self.text_decoder.get_input_embeddings(input_ids)
 
     def forward(
         self,
@@ -439,8 +392,6 @@ class MERaLiON2ForConditionalGeneration(nn.Module, SupportsMultiModal, SupportsP
         if intermediate_tensors is not None:
             inputs_embeds = None
 
-        # NOTE: In V1 the model runner always computes inputs_embeds before
-        # calling forward(), so the branch below is only for V0 compatibility.
         elif inputs_embeds is None:
             multimodal_embeddings = self.embed_multimodal(**kwargs)
             inputs_embeds = self.get_input_embeddings(input_ids, multimodal_embeddings)
@@ -454,14 +405,8 @@ class MERaLiON2ForConditionalGeneration(nn.Module, SupportsMultiModal, SupportsP
     def compute_logits(
         self,
         hidden_states: torch.Tensor,
-        sampling_metadata: Any,
     ) -> Optional[torch.Tensor]:
-        """Compute token logits from decoder hidden states.
-
-        ``sampling_metadata`` is typed as ``Any`` because its class was moved
-        between vLLM versions and is ``None`` in the V1 engine.
-        """
-        return self.text_decoder.compute_logits(hidden_states, sampling_metadata)
+        return self.text_decoder.compute_logits(hidden_states)
 
     def load_weights(self, weights: Iterable[Tuple[str, torch.Tensor]]) -> Set[str]:
         """Load model weights and return the set of loaded parameter names."""

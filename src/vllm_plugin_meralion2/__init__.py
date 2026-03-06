@@ -6,7 +6,7 @@ from packaging.version import Version
 def register() -> None:
     """Register MERaLiON2 model with vLLM's plugin system.
 
-    Supported vLLM versions: >= 0.10.1.
+    Supported vLLM versions: >= 0.12.0.
 
     The plugin targets the V1 engine (default since vLLM 0.8.0).  A single
     adapter module (``vllm0101``) covers the entire supported range; internal
@@ -22,7 +22,7 @@ def register() -> None:
     from vllm import ModelRegistry
 
     current_version = Version(vllm.__version__)
-    min_supported_version = Version("0.10.1")
+    min_supported_version = Version("0.12.0")
     # Soft upper cap: tested up to 0.16.x.  Newer patch/minor releases are
     # expected to remain compatible; bump this when a breaking change is found.
     max_supported_version = Version("0.17.0")

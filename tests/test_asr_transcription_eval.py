@@ -246,9 +246,6 @@ def _transcribe_single_sample(sample: dict, client: OpenAI, model_name: str) -> 
                 "repetition_penalty": 1.0,
                 "top_k": 50,
                 "length_penalty": 1.0,
-                "logits_processors": [
-                    {"qualname": "vllm_plugin_meralion2.NoRepeatNGramLogitsProcessor", "args": [6]}
-                ],
             },
             stream=False,
             seed=42,

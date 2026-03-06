@@ -18,15 +18,15 @@ class TestVersionCompatibility:
     def test_current_version_supported(self):
         """Test that current vLLM version is supported."""
         current_version = Version(vllm.__version__)
-        assert Version("0.10.1") <= current_version < Version("0.17.0"), (
+        assert Version("0.12.0") <= current_version < Version("0.17.0"), (
             f"vLLM version {current_version} is not supported. "
-            "Supported versions: >=0.10.1,<0.17.0"
+            "Supported versions: >=0.12.0,<0.17.0"
         )
 
     def test_supported_range_registration(self):
         """Test registration works for supported semver range."""
         current_version = Version(vllm.__version__)
-        if Version("0.10.1") <= current_version < Version("0.17.0"):
+        if Version("0.12.0") <= current_version < Version("0.17.0"):
             register()
             supported_archs = ModelRegistry.get_supported_archs()
             assert "MERaLiON2ForConditionalGeneration" in supported_archs
@@ -37,7 +37,7 @@ class TestVersionCompatibility:
         # We can't easily test unsupported versions without mocking,
         # but we verify the registration works for supported versions
         current_version = Version(vllm.__version__)
-        if Version("0.10.1") <= current_version < Version("0.17.0"):
+        if Version("0.12.0") <= current_version < Version("0.17.0"):
             # Should not raise error
             try:
                 register()
@@ -59,7 +59,7 @@ class TestVersionCompatibility:
         try:
             model_cls = ModelRegistry._try_load_model_cls("MERaLiON2ForConditionalGeneration")
 
-            if Version("0.10.1") <= current_version < Version("0.17.0"):
+            if Version("0.12.0") <= current_version < Version("0.17.0"):
                 assert model_cls.__module__.endswith("vllm0101")
         except Exception:
             # If loading fails, at least verify registration
