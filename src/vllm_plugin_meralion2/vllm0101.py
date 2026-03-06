@@ -123,9 +123,16 @@ class MERaLiON2DummyInputsBuilder(BaseDummyInputsBuilder[MERaLiON2ProcessingInfo
 class MERaLiON2MultiModalProcessor(BaseMultiModalProcessor[MERaLiON2ProcessingInfo]):
     """Multi-modal processor for MERaLiON2: parses and encodes audio for the model."""
 
-    def _get_data_parser(self) -> MultiModalDataParser:
+    def __init__(self, info, dummy_inputs, *, cache=None):
+        super().__init__(info, dummy_inputs, cache=cache)
+        # In vLLM 0.12.0–0.15.x super().__init__ calls _get_data_parser() on
+        # the processor (which defaults to MultiModalDataParser() with no
+        # target_sr).  In 0.16.0 it calls info.get_data_parser() instead and
+        # rejects any _get_data_parser override on the processor.  Override
+        # self.data_parser here (an ordinary instance attribute in all
+        # versions) so audio is always resampled to the Whisper target rate.
         feature_extractor = self.info.get_feature_extractor()
-        return MultiModalDataParser(target_sr=feature_extractor.sampling_rate)
+        self.data_parser = MultiModalDataParser(target_sr=feature_extractor.sampling_rate)
 
     def _call_hf_processor(
         self,
