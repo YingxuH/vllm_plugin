@@ -90,6 +90,13 @@ class MERaLiON2ProcessingInfo(BaseProcessingInfo):
     def get_supported_mm_limits(self) -> Mapping[str, Optional[int]]:
         return {"audio": None}
 
+    def get_data_parser(self) -> MultiModalDataParser:
+        # vLLM 0.16.0+ calls this via BaseProcessingInfo.data_parser
+        # (cached_property) instead of BaseMultiModalProcessor._get_data_parser.
+        # Provide target_sr so audio is resampled to the Whisper rate.
+        feature_extractor = self.get_feature_extractor()
+        return MultiModalDataParser(target_sr=feature_extractor.sampling_rate)
+
 
 class MERaLiON2DummyInputsBuilder(BaseDummyInputsBuilder[MERaLiON2ProcessingInfo]):
     """Builds dummy text and multimodal inputs for MERaLiON2 profiling."""
