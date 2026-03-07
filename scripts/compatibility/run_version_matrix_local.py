@@ -269,6 +269,10 @@ def run_mode(
         if not ready:
             data["error_signature"] = f"startup-timeout: {reason}"
             return data
+        warmup_s = int(server_cfg.get("post_ready_warmup_seconds", 0))
+        if warmup_s > 0:
+            append_log(mode_log, f"POST_READY_WARMUP: sleeping {warmup_s}s for JIT warm-up")
+            time.sleep(warmup_s)
         cmd = [str(Path(env["VIRTUAL_ENV"]) / "bin" / "python"), "-m", "pytest", "-q", *tests]
         rc, out = run_cmd(cmd, cwd=repo_root, env=env, log_file=mode_log, timeout=7200)
         data["pytest_exit_code"] = rc
