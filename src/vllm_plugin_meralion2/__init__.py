@@ -6,7 +6,7 @@ from packaging.version import Version
 def register() -> None:
     """Register MERaLiON2 model with vLLM's plugin system.
 
-    Supported vLLM versions: >= 0.12.0.
+    Supported vLLM versions: >= 0.12.0, < 0.15.0.
 
     The plugin targets the V1 engine (default since vLLM 0.8.0).  A single
     adapter module (``vllm0101``) covers the entire supported range; internal
@@ -23,9 +23,11 @@ def register() -> None:
 
     current_version = Version(vllm.__version__)
     min_supported_version = Version("0.12.0")
-    # Soft upper cap: tested up to 0.16.x.  Newer patch/minor releases are
-    # expected to remain compatible; bump this when a breaking change is found.
-    max_supported_version = Version("0.17.0")
+    # Tested range: 0.12.0 – 0.14.x.  vLLM 0.15.0 upgrades FlashInfer to
+    # 0.6.x which changes FA kernel selection on SM90a (H100), altering
+    # greedy-decoding behaviour for marginal samples at repetition_penalty=1.0.
+    # Support for 0.15.0+ is tracked in the next plugin version.
+    max_supported_version = Version("0.15.0")
 
     if not (min_supported_version <= current_version < max_supported_version):
         raise RuntimeError(
