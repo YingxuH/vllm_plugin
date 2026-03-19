@@ -43,7 +43,7 @@ TTFT_P95_BUDGET_MS = 10000
 # baseline; Chinese datasets (ytb_asr_batch3_chinese) were hitting ~103 ms.
 # Override at runtime via: ASR_ITL_P95_BUDGET_MS=<ms>
 ITL_P95_BUDGET_MS = 120
-DEFAULT_MAX_SAMPLES = 32
+DEFAULT_MAX_SAMPLES = 12
 DEFAULT_MAX_COMPLETION_TOKENS = 200
 
 

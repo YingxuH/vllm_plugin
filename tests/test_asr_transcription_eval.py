@@ -23,6 +23,12 @@ if tests_dir not in sys.path:
     sys.path.insert(0, tests_dir)
 
 from test_utils import get_openai_client
+from text_normalizer import (
+    preprocess_text_asr,
+    preprocess_text_asr_code_switch_chinese,
+    preprocess_text_asr_malay,
+    preprocess_text_asr_tamil,
+)
 
 
 PROMPT_TEXT = "Please transcribe this speech."
@@ -32,7 +38,7 @@ PROMPT_TEMPLATE = (
 )
 
 DEFAULT_PRIVATE_DATA_ROOT = "/home/yingxu/private_data"
-MAX_WORKERS = 24
+MAX_WORKERS = int(os.getenv("ASR_TEST_MAX_WORKERS", "12"))
 ASR_CHUNK_SECONDS = 30.0
 DEFAULT_DATASETS = [
     "idpc_short_ASR_v2",
@@ -41,22 +47,40 @@ DEFAULT_DATASETS = [
     "ytb_asr_batch2",
     "ytb_asr_batch3_chinese",
     "ytb_asr_batch3_malay",
-    "ytb_asr_batch3_tamil",
+    "ytb_asr_batch3_tamil_v2",
 ]
 
 DEFAULT_DATASETS_WER = {
-    "idpc_short_ASR_v2": 0.18,
-    "ste_test3": 0.25,
-    "ytb_asr_batch1": 0.14,
-    "ytb_asr_batch2": 0.15,
-    "ytb_asr_batch3_chinese": 0.2,
-    "ytb_asr_batch3_malay": 0.2,
-    "ytb_asr_batch3_tamil": 0.7,
+    "idpc_short_ASR_v2": 0.16,
+    "ste_test3": 0.15,
+    "ytb_asr_batch1": 0.11,
+    "ytb_asr_batch2": 0.12,
+    "ytb_asr_batch3_chinese": 0.17,
+    "ytb_asr_batch3_malay": 0.18,
+    "ytb_asr_batch3_tamil_v2": 0.35,
+}
+
+# Per-dataset normalizer mapping (Audiobench-compatible).
+# Datasets not in this map use the lightweight _normalize_text fallback.
+_DATASET_NORMALIZER = {
+    "idpc_short_ASR_v2": preprocess_text_asr,
+    "ste_test3": preprocess_text_asr,
+    "ytb_asr_batch1": preprocess_text_asr,
+    "ytb_asr_batch2": preprocess_text_asr,
+    "ytb_asr_batch3_chinese": preprocess_text_asr_code_switch_chinese,
+    "ytb_asr_batch3_malay": preprocess_text_asr_malay,
+    "ytb_asr_batch3_tamil_v2": preprocess_text_asr_tamil,
+}
+
+# Dataset name → directory name overrides (when the directory name doesn't
+# match the logical dataset name).
+_DATASET_PATH_OVERRIDES = {
+    "ytb_asr_batch3_tamil_v2": "ytb_asr_batch3_tamil_filtered",
 }
 
 
-def _normalize_text(text: str) -> str:
-    """Lightweight text normalization adapted from Audiobench ASR preprocessing."""
+def _normalize_text_fallback(text: str) -> str:
+    """Lightweight fallback normalizer for datasets without an Audiobench normalizer."""
     text = text.lower()
     text = re.sub(r"(\[|\(|\{|\<)[^\(\)\[\]\{\}\<\>]*(\]|\)|\}|\>)", " ", text)
     text = re.sub(r"[^\w\s\u4e00-\u9fff\u0E00-\u0E7F\u0B80-\u0BFF]", " ", text)
@@ -65,33 +89,19 @@ def _normalize_text(text: str) -> str:
     return text
 
 
-def _is_cjk_or_thai(ch: str) -> bool:
-    return ("\u4e00" <= ch <= "\u9fff") or ("\u0E00" <= ch <= "\u0E7F")
+def _tokenize_for_wer(text: str, dataset_name: str = "") -> list[str]:
+    """Normalize and tokenize text for WER computation.
 
-
-def _tokenize_for_wer(text: str) -> list[str]:
-    """Tokenize by words for latin scripts; char-level for CJK/Thai text."""
-    normalized = _normalize_text(text)
+    Uses per-dataset Audiobench normalizers when available, falling back to
+    the lightweight regex normalizer for unknown datasets.  After normalization,
+    the text is simply split on whitespace — language-specific character
+    spacing (e.g. Chinese) is handled inside the normalizer.
+    """
+    normalizer = _DATASET_NORMALIZER.get(dataset_name, _normalize_text_fallback)
+    normalized = normalizer(text)
     if not normalized:
         return []
-
-    tokens: list[str] = []
-    buffer: list[str] = []
-
-    def flush_buffer() -> None:
-        if buffer:
-            tokens.extend("".join(buffer).split())
-            buffer.clear()
-
-    for ch in normalized:
-        if _is_cjk_or_thai(ch):
-            flush_buffer()
-            tokens.append(ch)
-        else:
-            buffer.append(ch)
-
-    flush_buffer()
-    return tokens
+    return normalized.split()
 
 
 def _levenshtein_distance(reference: list[str], prediction: list[str]) -> int:
@@ -116,13 +126,15 @@ def _levenshtein_distance(reference: list[str], prediction: list[str]) -> int:
     return prev[-1]
 
 
-def _compute_dataset_wer(references: Iterable[str], predictions: Iterable[str]) -> float:
+def _compute_dataset_wer(
+    references: Iterable[str], predictions: Iterable[str], dataset_name: str = ""
+) -> float:
     total_errors = 0
     total_ref_tokens = 0
 
     for reference, prediction in zip(references, predictions):
-        ref_tokens = _tokenize_for_wer(reference)
-        pred_tokens = _tokenize_for_wer(prediction)
+        ref_tokens = _tokenize_for_wer(reference, dataset_name)
+        pred_tokens = _tokenize_for_wer(prediction, dataset_name)
         total_errors += _levenshtein_distance(ref_tokens, pred_tokens)
         total_ref_tokens += len(ref_tokens)
 
@@ -263,7 +275,8 @@ def _transcribe_single_sample(sample: dict, client: OpenAI, model_name: str) -> 
 def test_served_audiollm_asr_wer_lt_one(dataset_name: str) -> None:
     """Evaluate transcription quality on local HF ASR datasets (WER < 1)."""
     root = Path(os.getenv("ASR_TEST_DATA_ROOT", DEFAULT_PRIVATE_DATA_ROOT))
-    dataset_path = root / dataset_name
+    dir_name = _DATASET_PATH_OVERRIDES.get(dataset_name, dataset_name)
+    dataset_path = root / dir_name
     if not dataset_path.exists():
         pytest.skip(f"Dataset path not found: {dataset_path}")
 
@@ -278,7 +291,7 @@ def test_served_audiollm_asr_wer_lt_one(dataset_name: str) -> None:
 
     assert isinstance(data, Dataset)
 
-    max_samples = int(os.getenv("ASR_TEST_MAX_SAMPLES", "16"))
+    max_samples = int(os.getenv("ASR_TEST_MAX_SAMPLES", "0"))
     if max_samples > 0 and len(data) > max_samples:
         data = data.select(range(max_samples))
 
@@ -299,7 +312,7 @@ def test_served_audiollm_asr_wer_lt_one(dataset_name: str) -> None:
     predictions = [prediction for prediction, _ in results]
     references = [reference for _, reference in results]
 
-    dataset_wer = _compute_dataset_wer(references, predictions)
+    dataset_wer = _compute_dataset_wer(references, predictions, dataset_name)
     wer_threshold = DEFAULT_DATASETS_WER[dataset_name]
 
     print(f"{dataset_name} WER={dataset_wer:.4f}")
