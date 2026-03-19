@@ -60,19 +60,7 @@ def is_v0_engine() -> bool:
 def is_v1_engine() -> bool:
     """Check if using supported V1 range for this plugin."""
     version = Version(get_vllm_version())
-    return Version("0.8.5") <= version < Version("0.11.0")
-
-
-def is_v1_08_09_engine() -> bool:
-    """Check if using vLLM 0.8/0.9 compatibility lane."""
-    version = Version(get_vllm_version())
-    return Version("0.8.5") <= version < Version("0.10.0")
-
-
-def is_v1_010_engine() -> bool:
-    """Check if using vLLM 0.10 compatibility lane."""
-    version = Version(get_vllm_version())
-    return Version("0.10.0") <= version < Version("0.11.0")
+    return Version("0.12.0") <= version < Version("0.17.0")
 
 
 @pytest.fixture
@@ -84,4 +72,4 @@ def vllm_version() -> str:
 @pytest.fixture
 def supported_vllm_versions() -> list[str]:
     """Get supported vLLM range represented as a list entry."""
-    return [">=0.8.5,<0.11.0"]
+    return [">=0.12.0,<0.17.0"]

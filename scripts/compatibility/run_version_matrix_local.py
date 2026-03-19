@@ -160,23 +160,100 @@ def wait_server_ready(base_url: str, health_path: str, timeout_s: int, poll_s: i
     return False, reason
 
 
-def terminate_group(process: subprocess.Popen[Any] | None) -> None:
-    if process is None or process.poll() is not None:
-        return
+def _kill_vllm_orphans(log_file: Path) -> None:
+    """Kill any surviving vLLM engine/worker processes by process name.
+
+    vLLM TP workers are spawned in their own sessions and survive the
+    top-level process-group kill.  This scans /proc/*/comm for names
+    matching vLLM internals and force-kills them.
+    """
+    killed: list[int] = []
     try:
-        pgid = os.getpgid(process.pid)
-    except ProcessLookupError:
-        return
-    for sig, wait_s in ((signal.SIGTERM, 8), (signal.SIGKILL, 2)):
+        for entry in Path("/proc").iterdir():
+            if not entry.name.isdigit():
+                continue
+            try:
+                comm = (entry / "comm").read_text().strip()
+                if comm.startswith("VLLM::") or comm in ("EngineCore", "VllmWorker"):
+                    pid = int(entry.name)
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                        killed.append(pid)
+                    except (ProcessLookupError, PermissionError):
+                        pass
+            except (FileNotFoundError, ValueError, PermissionError):
+                pass
+    except (FileNotFoundError, PermissionError):
+        pass
+    if killed:
+        append_log(log_file, f"Killed orphan vLLM processes: {killed}")
+
+
+def wait_for_gpu_free(
+    min_free_gb: float,
+    timeout_s: int = 120,
+    poll_s: int = 5,
+    log_file: Path | None = None,
+    gpu_index: int = 1,
+) -> bool:
+    """Poll nvidia-smi until the target GPU has at least min_free_gb MiB free.
+
+    Uses nvidia-smi instead of torch so no CUDA context is created by the
+    matrix runner process itself (avoids potential driver interference).
+    Falls back to a fixed sleep if nvidia-smi is unavailable.
+    """
+    min_free_mib = int(min_free_gb * 1024)
+    if not shutil.which("nvidia-smi"):
+        # Can't query — fall back to a fixed wait
+        if log_file:
+            append_log(log_file, f"wait_for_gpu_free: nvidia-smi not found, sleeping {timeout_s}s")
+        time.sleep(timeout_s)
+        return False
+    end = time.time() + timeout_s
+    while time.time() < end:
         try:
-            os.killpg(pgid, sig)
+            r = subprocess.run(
+                ["nvidia-smi", "--query-gpu=memory.free",
+                 "--format=csv,noheader,nounits", "-i", str(gpu_index)],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            if r.returncode == 0:
+                free_mib = int(r.stdout.strip())
+                if free_mib >= min_free_mib:
+                    return True
+        except (subprocess.TimeoutExpired, OSError, ValueError):
+            pass
+        time.sleep(poll_s)
+    if log_file:
+        append_log(
+            log_file,
+            f"wait_for_gpu_free: timeout after {timeout_s}s waiting for {min_free_gb:.1f} GiB free on GPU {gpu_index}",
+        )
+    return False
+
+
+def terminate_group(process: subprocess.Popen[Any] | None) -> None:
+    if process is None:
+        return
+    if process.poll() is None:
+        try:
+            pgid = os.getpgid(process.pid)
         except ProcessLookupError:
-            return
-        end = time.time() + wait_s
-        while time.time() < end:
-            if process.poll() is not None:
-                return
-            time.sleep(0.2)
+            pgid = None
+        for sig, wait_s in ((signal.SIGTERM, 8), (signal.SIGKILL, 2)):
+            if pgid is not None:
+                try:
+                    os.killpg(pgid, sig)
+                except ProcessLookupError:
+                    pgid = None
+            end = time.time() + wait_s
+            while time.time() < end:
+                if process.poll() is not None:
+                    break
+                time.sleep(0.2)
 
 
 def build_summary(payload: dict[str, Any]) -> str:
@@ -195,9 +272,13 @@ def build_summary(payload: dict[str, Any]) -> str:
         for e in entries:
             modes = e.get("modes", {})
             install = "PASS" if e.get("install", {}).get("ok") else "FAIL"
-            general = "PASS" if modes.get("general", {}).get("ok") else "FAIL"
-            latency = "PASS" if modes.get("latency", {}).get("ok") else "FAIL"
-            asr = "PASS" if modes.get("asr", {}).get("ok") else "FAIL"
+            def _mode_status(m: str) -> str:
+                if m not in modes:
+                    return "N/A"
+                return "PASS" if modes[m].get("ok") else "FAIL"
+            general = _mode_status("general")
+            latency = _mode_status("latency")
+            asr = _mode_status("asr")
             overall = "PASS" if e.get("overall_ok") else "FAIL"
             sig = (e.get("error_signature", "") or "").replace("|", "\\|")
             lines.append(
@@ -269,6 +350,10 @@ def run_mode(
         if not ready:
             data["error_signature"] = f"startup-timeout: {reason}"
             return data
+        warmup_s = int(server_cfg.get("post_ready_warmup_seconds", 0))
+        if warmup_s > 0:
+            append_log(mode_log, f"POST_READY_WARMUP: sleeping {warmup_s}s for JIT warm-up")
+            time.sleep(warmup_s)
         cmd = [str(Path(env["VIRTUAL_ENV"]) / "bin" / "python"), "-m", "pytest", "-q", *tests]
         rc, out = run_cmd(cmd, cwd=repo_root, env=env, log_file=mode_log, timeout=7200)
         data["pytest_exit_code"] = rc
@@ -279,6 +364,13 @@ def run_mode(
         return data
     finally:
         terminate_group(proc)
+        # Kill any orphaned vLLM TP workers that survived the process-group kill.
+        _kill_vllm_orphans(mode_log)
+        # Wait for the GPU driver to reclaim VRAM (EngineCore subprocess holds
+        # a CUDA context even after the main process exits).  Require ≥35 GiB
+        # free on GPU 1 before starting the next server.
+        if not wait_for_gpu_free(35.0, timeout_s=120, poll_s=5, log_file=mode_log):
+            append_log(mode_log, "WARNING: GPU memory did not fully recover; proceeding anyway")
         if not wait_port_closed(host, port, timeout_s=8):
             force_cleanup_port(port, mode_log)
             wait_port_closed(host, port, timeout_s=8)

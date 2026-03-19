@@ -5,3 +5,6 @@ dist/
 **/.pytest_cache/
 .venvs/
 artifacts/
+delete/
+CLAUDE.md
+.learnings/

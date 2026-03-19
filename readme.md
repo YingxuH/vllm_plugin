@@ -13,10 +13,13 @@
 
 ### Set up Environment
 
-This plugin family has two release lines:
+This plugin family has three release lines:
 
-- `v0.1.x`: compatibility lane for vLLM version `0.6.5` ~ `0.7.3` (V0 engine), and `0.8.5` ~ `0.8.5.post1` (V1 engine). 
-- `v0.2.x`: compatibility lane for `vLLM >=0.8.5,<=0.10.0`. Refer to [matrix_summary.md](https://github.com/YingxuH/vllm_plugin/blob/main/matrix_summary.md) for detailed vLLM + transformers compatibility.
+- `v0.1.x`: compatibility lane for vLLM version `0.6.5` ~ `0.7.3` (V0 engine), and `0.8.5` ~ `0.8.5.post1` (V1 engine).
+- `v0.2.x`: compatibility lane for `vLLM >=0.8.5,<=0.10.0`.
+- `v0.3.x`: compatibility lane for `vLLM >=0.12.0,<0.17.0`. Targets the V1 engine and handles all internal API changes across the 0.12–0.16 minor series.
+
+See [scripts/compatibility/](https://github.com/YingxuH/vllm_plugin/tree/main/scripts/compatibility) for the automated version-matrix runner and detailed vLLM + transformers compatibility results.
 
 Install by your vLLM version:
 
@@ -26,13 +29,12 @@ pip install "vllm-plugin-meralion2<0.2"
 
 # For vLLM 0.8.5 ~ 0.10.0
 pip install "vllm-plugin-meralion2>=0.2,<0.3"
+
+# For vLLM 0.12.0 ~ 0.16.x
+pip install "vllm-plugin-meralion2>=0.3,<0.4"
 ```
 
-It's strongly recommended to install flash-attn for better memory and gpu utilization. 
-
-```bash
-pip install flash-attn --no-build-isolation
-```
+**Attention backend:** MERaLiON-2 uses Gemma2's attention logit softcapping which requires the FlashInfer backend. The serve example handles this automatically. See [openai_serve_example.sh](https://github.com/YingxuH/vllm_plugin/blob/main/example_scripts/openai_serve_example.sh) for details.
 
 ### Offline Inference
 
@@ -40,7 +42,7 @@ Refer to [offline_example.py](https://github.com/YingxuH/vllm_plugin/blob/main/e
 
 ### OpenAI-compatible Serving
 
-Refer to [openai_serve_example.sh](https://github.com/YingxuH/vllm_plugin/blob/main/example_scripts/openai_serve_example.sh) for openAI-compatible serving example.
+Refer to [openai_serve_example.sh](https://github.com/YingxuH/vllm_plugin/blob/main/example_scripts/openai_serve_example.sh) for OpenAI-compatible serving example.
 
 To call the server, you can refer to [openai_client_example.py](https://github.com/YingxuH/vllm_plugin/blob/main/example_scripts/openai_client_example.py).
 
@@ -51,10 +53,20 @@ Alternatively, you can try calling the server with curl, refer to [openai_client
 See [CHANGELOG.md](https://github.com/YingxuH/vllm_plugin/blob/main/CHANGELOG.md).
 
 
-### vLLM + transformers compatibility
+### vLLM + transformers compatibility (v0.3.x)
 
+Tested with `transformers==4.57.6` on H100 (TP=1). Each cell covers install, unit tests, and full-dataset ASR evaluation.
 
-See [matrix_summary.md](https://github.com/YingxuH/vllm_plugin/blob/main/matrix_summary.md)
+| vLLM | transformers | install | tests | ASR eval | overall |
+|------|-------------|---------|-------|----------|---------|
+| 0.12.0 | 4.57.6 | PASS | PASS | PASS | PASS |
+| 0.13.0 | 4.57.6 | PASS | PASS | PASS | PASS |
+| 0.14.0 | 4.57.6 | PASS | PASS | PASS | PASS |
+| 0.15.0 | 4.57.6 | PASS | PASS | PASS | PASS |
+| 0.15.1 | 4.57.6 | PASS | PASS | PASS | PASS |
+| 0.16.0 | 4.57.6 | PASS | PASS | PASS | PASS |
+
+To reproduce or extend this matrix, see the [compatibility matrix runner](https://github.com/YingxuH/vllm_plugin/tree/main/scripts/compatibility).
 
 ### Security and dependency scanning
 

@@ -32,6 +32,9 @@ Changelog = "https://github.com/YingxuH/vllm_plugin/blob/main/CHANGELOG.md"
 [project.entry-points."vllm.general_plugins"]
 register_dummy_model = "vllm_plugin_meralion2:register"
 
+[project.entry-points."vllm.logits_processors"]
+NoRepeatNGramLogitsProcessor = "vllm_plugin_meralion2.transformers_utils.no_repeat_logits_processor:NoRepeatNGramV1LogitsProcessor"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

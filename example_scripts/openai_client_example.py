@@ -59,9 +59,8 @@ generation_parameters = dict(
         "repetition_penalty": 1.0,
         "top_k": 50,
         "length_penalty": 1.0,
-        "logits_processors": [
-            {"qualname": "vllm_plugin_meralion2.NoRepeatNGramLogitsProcessor", "args": [6]}
-        ]
+        # NoRepeatNGramLogitsProcessor is auto-registered by the plugin's
+        # entry-point — no per-request logits_processors needed.
     },
     seed=42
 )
