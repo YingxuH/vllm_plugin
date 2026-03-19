@@ -5,7 +5,7 @@ import numpy as np
 from typing import Optional, Tuple, List
 from openai import OpenAI
 
-# Model path from serve_test_meralion2_general.sh
+# Model path from scripts/examples/serve_meralion2_general.sh
 DEFAULT_MODEL_PATH = "/workspace/MERaLiON_local/MERaLiON-2-10B"
 DEFAULT_BASE_URL = os.getenv("VLLM_TEST_BASE_URL", "http://localhost:8063/v1")
 DEFAULT_API_KEY = os.getenv("VLLM_TEST_API_KEY", "EMPTY")

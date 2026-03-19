@@ -46,15 +46,13 @@ pytest tests/test_model_registration.py::TestModelRegistration::test_plugin_regi
 
 ### Version-Specific Testing
 
-The plugin supports multiple vLLM versions:
-- **V0 Engine**: vLLM 0.6.5 ~ 0.7.3
-- **V1 Engine**: vLLM 0.8.5 ~ 0.8.5.post1
+The plugin (v0.3.x) supports vLLM `>=0.12.0, <0.17.0` (V1 engine).
 
 To test with a specific vLLM version:
 
 ```bash
 # Install specific vLLM version
-pip install vllm==0.6.5  # or 0.7.3, 0.8.5, 0.8.5.post1
+pip install vllm==0.12.0  # or 0.13.0, 0.14.0, 0.15.0, 0.15.1, 0.16.0
 
 # Run tests
 pytest tests/
@@ -165,7 +163,7 @@ If you encounter import errors, ensure:
 ### Version Mismatch
 If tests fail due to version mismatch:
 1. Check vLLM version: `python -c "import vllm; print(vllm.__version__)"`
-2. Ensure version is in supported range (0.6.5-0.7.3 or 0.8.5-0.8.5.post1)
+2. Ensure version is in supported range (>=0.12.0, <0.17.0)
 3. Install correct version if needed
 
 ### GPU Requirements
