@@ -86,8 +86,8 @@ def get_conversation_response(messages, **params):
 
 # Load audio files
 # Make sure these are 16khz, mono channel audio files
-audio_file_1 = "/workspace/vllm/idpc_sample.mp3"
-audio_file_2 = "/workspace/vllm/idpc_sample.mp3"  # Using same file for demo, replace with different audio
+audio_file_1 = "example.wav"  # change to your audio file (16 kHz, mono)
+audio_file_2 = "example.wav"  # replace with a different audio file for demo
 
 try:
     audio_bytes_1 = open(audio_file_1, "rb").read()
@@ -104,7 +104,7 @@ except FileNotFoundError:
     audio_base64_2 = audio_base64_1
 
 # Initialize client
-client, model_name = get_client(base_url="http://localhost:8063/v1")
+client, model_name = get_client(base_url="http://localhost:8000/v1")
 
 generation_parameters = dict(
     model=model_name,
@@ -115,9 +115,8 @@ generation_parameters = dict(
         "repetition_penalty": 1.0,
         "top_k": 50,
         "length_penalty": 1.0,
-        # "logits_processors": [
-        #     {"qualname": "vllm_plugin_meralion2.NoRepeatNGramLogitsProcessor", "args": [6]}
-        # ]
+        # NoRepeatNGramLogitsProcessor is auto-registered by the plugin's
+        # entry-point — no per-request logits_processors needed.
     },
     stream=False,
     seed=42

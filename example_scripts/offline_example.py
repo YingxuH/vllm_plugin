@@ -1,8 +1,11 @@
-import os
 import torch
 import librosa
 
 from vllm import LLM, SamplingParams
+
+# MERaLiON-2 requires FlashInfer attention backend for Gemma2 softcapping.
+# For vLLM <0.13.0: set VLLM_ATTENTION_BACKEND=FLASHINFER env var before running.
+# For vLLM >=0.13.0: pass attention_backend="FLASHINFER" to LLM() below.
 
 
 model_name = "MERaLiON/MERaLiON-2-10B"
@@ -20,7 +23,7 @@ llm = LLM(
 # change example.wav to your audio file.
 audio_array, sample_rate = librosa.load("example.wav", sr=16000)
 
-question= "Please trancribe this speech."
+question = "Please transcribe this speech."
 prompt = (
     "<start_of_turn>user\n"
     f"Instruction: {question} \nFollow the text instruction based on the following audio: <SpeechHere><end_of_turn>\n"
@@ -34,10 +37,8 @@ sampling_params = SamplingParams(
     seed=42,
     max_tokens=1024,
     stop_token_ids=None,
-    # vLLM V1 does not support per-request logits_processors.
-    # If you need NoRepeatNGramLogitsProcessor, run with V0 engine
-    # (e.g. set VLLM_USE_V1=0 before launching).
-    # logits_processors=[NoRepeatNGramLogitsProcessor(6)],
+    # NoRepeatNGramLogitsProcessor is auto-registered by the plugin's
+    # entry-point — no per-request logits_processors needed.
 )
 
 mm_data = {"audio": [(audio_array, sample_rate)]}
