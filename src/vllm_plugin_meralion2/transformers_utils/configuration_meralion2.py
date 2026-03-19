@@ -12,7 +12,8 @@ logger = logging.get_logger(__name__)
 
 class MERaLiON2Config(PretrainedConfig):
     r"""
-    This is the configuration class to store the configuration of a [`MERaLiON2ForConditionalGeneration`]. It is used to instantiate an
+    This is the configuration class to store the configuration of a
+    [`MERaLiON2ForConditionalGeneration`]. It is used to instantiate an
     MERaLiON2 model according to the specified arguments, defining the model architecture. Instantiating a configuration
     with the defaults will yield a similar configuration to that of the MERaLiON2.
 

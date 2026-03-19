@@ -45,7 +45,7 @@ class MERaLiON2SpeechAudioAdaper(nn.Module):
             speech_mlp_use_projection: Whether to use projection layers.
         """
 
-        super(MERaLiON2SpeechAudioAdaper, self).__init__()
+        super().__init__()
         self.speech_mlp_scale_factor = speech_mlp_scale_factor
         self.speech_mlp_use_projection = speech_mlp_use_projection
 

@@ -152,17 +152,17 @@ class MERaLiON2MultiModalProcessor(BaseMultiModalProcessor[MERaLiON2ProcessingIn
         if not mm_data.get("audios", []):
             prompt_ids = self.info.get_tokenizer().encode(prompt)
             prompt_ids = self._apply_hf_processor_tokens_only(prompt_ids)
-            return BatchFeature(dict(input_ids=[prompt_ids]), tensor_type="pt")
+            return BatchFeature({"input_ids": [prompt_ids]}, tensor_type="pt")
 
         processor = self.info.get_hf_processor()
         feature_extractor = self.info.get_feature_extractor(**mm_kwargs)
         speech_token_id = getattr(processor, "speech_token_index", 255999)
         output_chunk_size = getattr(processor, "fixed_speech_embeds_length", 100)
 
-        mm_kwargs = dict(
+        mm_kwargs = {
             **mm_kwargs,
-            sampling_rate=feature_extractor.sampling_rate,
-        )
+            "sampling_rate": feature_extractor.sampling_rate,
+        }
 
         results = super()._call_hf_processor(
             prompt=prompt,
@@ -195,10 +195,10 @@ class MERaLiON2MultiModalProcessor(BaseMultiModalProcessor[MERaLiON2ProcessingIn
         hf_inputs: BatchFeature,
         hf_processor_mm_kwargs: Mapping[str, object],
     ) -> Mapping[str, MultiModalFieldConfig]:
-        return dict(
-            input_features=MultiModalFieldConfig.batched("audio"),
-            feature_attention_mask=MultiModalFieldConfig.batched("audio"),
-        )
+        return {
+            "input_features": MultiModalFieldConfig.batched("audio"),
+            "feature_attention_mask": MultiModalFieldConfig.batched("audio"),
+        }
 
     def _get_prompt_updates(
         self,

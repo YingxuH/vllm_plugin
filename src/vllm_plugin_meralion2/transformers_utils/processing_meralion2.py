@@ -16,7 +16,8 @@ from transformers.tokenization_utils_base import (
 # copied from transformers.models.qwen2_audio.processing_qwen2_audio.Qwen2AudioProcessor
 class MERaLiON2Processor(ProcessorMixin):
     r"""
-    Constructs a MERaLiON2 processor which wraps a whisper feature extractor and a gemma tokenizer into a single processor.
+    Constructs a MERaLiON2 processor which wraps a whisper feature extractor
+    and a gemma tokenizer into a single processor.
 
     [`MERaLiON2Processor`] offers all the functionalities of [`WhisperFeatureExtractor`] and [`GemmaTokenizer`]. See the
     [`~MERaLiON2Processor.__call__`] and [`~MERaLiON2Processor.decode`] for more information.
@@ -142,7 +143,8 @@ class MERaLiON2Processor(ProcessorMixin):
         Main method to prepare for the model one or several sequences(s) and audio(s). This method forwards the `text`
         and `kwargs` arguments to GemmaTokenizer's [`~GemmaTokenizer.__call__`] if `text` is not `None` to encode
         the text. To prepare the audio(s), this method forwards the `audios` and `kwrags` arguments to
-        WhisperFeatureExtractor's [`~WhisperFeatureExtractor.__call__`] if `audios` is not `None`. Please refer to the doctsring
+        WhisperFeatureExtractor's [`~WhisperFeatureExtractor.__call__`] if `audios` is not `None`.
+        Please refer to the docstring
         of the above two methods for more information.
 
         Args:

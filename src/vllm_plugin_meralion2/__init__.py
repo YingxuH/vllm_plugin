@@ -62,7 +62,7 @@ def register() -> None:
     # NoRepeatNGram to work across all supported versions with rep_penalty=1.0.
     max_supported_version = Version("0.17.0")
 
-    if not (min_supported_version <= current_version < max_supported_version):
+    if min_supported_version > current_version or current_version >= max_supported_version:
         raise RuntimeError(
             f"MERaLiON2 plugin does not support vLLM version {vllm.__version__}. "
             f"Supported range: >= {min_supported_version}, < {max_supported_version}"
