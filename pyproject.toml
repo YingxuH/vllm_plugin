@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vllm_plugin_meralion2"
-version = "0.2.0"
+version = "0.3.0"
 description = "A vLLM plugin to register the MERaLiON-2-10B model architecture with vLLM’s plugin system."
 authors = [{name = "MERaLiON Team"},]
 readme = "readme.md"
