@@ -6,3 +6,5 @@ dist/
 .venvs/
 artifacts/
 delete/
+CLAUDE.md
+.learnings/
