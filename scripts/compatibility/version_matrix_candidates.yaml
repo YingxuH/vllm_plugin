@@ -2,33 +2,38 @@
   "vllm_versions": [
     "0.12.0",
     "0.13.0",
+    "0.14.0",
+    "0.15.0",
+    "0.15.1",
     "0.16.0"
   ],
   "transformers_candidates": {
     "0.12.0": [
-      "4.54.0",
-      "4.55.0",
-      "4.55.4",
       "4.56.0",
-      "4.57.6",
-      "5.0.0"
+      "4.57.6"
     ],
     "0.13.0": [
-      "4.54.0",
-      "4.55.0",
-      "4.55.4",
       "4.56.0",
-      "4.57.6",
-      "5.0.0"
+      "4.57.6"
+    ],
+    "0.14.0": [
+      "4.56.0",
+      "4.57.6"
+    ],
+    "0.15.0": [
+      "4.57.6"
+    ],
+    "0.15.1": [
+      "4.57.6"
     ],
     "0.16.0": [
       "4.57.6"
     ]
   },
   "serve_scripts": {
-    "general": "private_scripts/serve_test_meralion2_general.sh",
-    "latency": "private_scripts/serve_test_meralion2_ctm.sh",
-    "asr": "private_scripts/serve_test_meralion2_ctm.sh"
+    "general": "scripts/examples/serve_meralion2_general.sh",
+    "latency": "scripts/examples/serve_meralion2_ctm.sh",
+    "asr": "scripts/examples/serve_meralion2_ctm.sh"
   },
   "pytest_by_mode": {
     "general": [
@@ -45,18 +50,18 @@
       "tests/test_asr_latency_eval.py"
     ],
     "asr": [
-      "tests/test_asr_transcription_eval.py"
+      "tests/test_asr_transcription_eval.py",
+      "tests/test_asr_latency_eval.py"
     ]
   },
   "mode_order": [
     "general",
-    "latency",
     "asr"
   ],
   "server": {
     "base_url": "http://localhost:8063",
     "health_path": "/v1/models",
-    "startup_timeout_seconds": 180,
+    "startup_timeout_seconds": 300,
     "poll_interval_seconds": 2,
     "post_ready_warmup_seconds": 60
   },
@@ -69,7 +74,9 @@
       "datasets==2.20.0",
       "soundfile",
       "numpy",
-      "packaging"
+      "packaging",
+      "jiwer",
+      "more-itertools"
     ]
   }
 }
