@@ -59,7 +59,9 @@ yourself.
 MERaLiON-2 inherits Gemma2's **attention logit softcapping** — a `tanh`
 operation applied inside the attention kernel before softmax
 ([details](https://arxiv.org/abs/2407.08608)). vLLM's bundled FlashAttention
-backend doesn't implement softcapping; FlashInfer does (`logits_soft_cap` is a
+backend doesn't implement softcapping — using it silently ignores the softcap,
+producing numerically incorrect attention weights and degraded transcription
+with no error message. FlashInfer does implement it (`logits_soft_cap` is a
 first-class kernel template parameter). So for any Gemma2-based model on vLLM,
 you **must** use FlashInfer.
 
@@ -92,10 +94,9 @@ vLLM's multimodal interface changed in every minor release. Here's what broke:
 
 | Version | What changed |
 |---------|-------------|
-| 0.12 | `merge_multimodal_embeddings` removed; `sampling_metadata` param removed from `compute_logits`; `get_multimodal_embeddings` deprecated → `embed_multimodal` |
-| 0.13 | `get_multimodal_embeddings` deleted; `mm_options` kwarg added to `get_dummy_inputs` |
-| 0.15 | `BaseDummyInputsBuilder` moved from `multimodal.profiling` to `multimodal.processing` |
-| 0.16 | `MultiModalKwargs` replaced by `MultiModalKwargsItems`; `_get_data_parser()` on processor now raises `ValueError` — must override `get_data_parser()` on `ProcessingInfo` instead |
+| 0.12 | `merge_multimodal_embeddings` removed; `sampling_metadata` param removed from `compute_logits`; `get_multimodal_embeddings` deprecated → `embed_multimodal`; `mm_options` kwarg added to `get_dummy_inputs` |
+| 0.13 | `get_multimodal_embeddings` deleted |
+| 0.16 | `BaseDummyInputsBuilder` moved from `multimodal.profiling` to `multimodal.processing`; `MultiModalKwargs` replaced by `MultiModalKwargsItems`; `_get_data_parser()` on processor now raises `ValueError` — must override `get_data_parser()` on `ProcessingInfo` instead |
 
 We handle all of this with defensive imports (`try/except ImportError`) and
 version-conditioned patching. The nastiest was the `_get_data_parser` move: we
@@ -298,7 +299,10 @@ def _patch_logitsprocs_output_token_tracking():
 ```
 
 **Caveat**: this patches a private class. The `hasattr` guard fails silently if
-the attribute is removed. We plan to contribute the proper fix to vLLM upstream.
+the attribute is removed. The proper upstream fix is to re-evaluate the flag *after*
+`build_logitsprocs()` returns, using
+`bool(logitsprocs.non_argmax_invariant)`. We plan to file this as a vLLM
+issue.
 
 With this patch, all 6 vLLM versions (0.12.0–0.16.0) pass full-dataset ASR
 evaluation (1,575 samples, 7 datasets, 4 languages) with stable WER (±0.001)
@@ -312,6 +316,8 @@ After this incident, we built an automated matrix runner that, for every
 `(vLLM, transformers)` pair, creates an isolated venv, starts the server, runs
 unit tests + full ASR evaluation, and tears down — including force-killing
 orphaned `VLLM::*` processes that survive the parent.
+
+All tested against `transformers==4.57.6` on H100 (TP=1).
 
 | vLLM | English (n=384) | Chinese (n=206) | Tamil (n=184) | Status |
 |------|----------------|----------------|--------------|--------|
