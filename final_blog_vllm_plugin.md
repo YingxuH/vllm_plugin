@@ -6,8 +6,11 @@
 > `bool(custom_logitsprocs)` from the CLI-only list and passes the result
 > to `InputBatch`, never accounting for entry-point plugins loaded by
 > `build_logitsprocs()`. We found it after two days chasing a FlashInfer
-> red herring. Short monkey-patch fix included. Affects vLLM V1 with async
-> scheduling (the default for all standard executor backends).
+> red herring. Short monkey-patch fix included. **This affects any vLLM V1
+> entry-point logits processor plugin, not just AudioLLMs** — if your
+> processor inspects output token history and `repetition_penalty=1.0`,
+> it's silently broken. Affects all standard executor backends (async
+> scheduling is the default).
 
 > We're developers on the MERaLiON team who built a vLLM plugin for
 > [MERaLiON-2](https://huggingface.co/MERaLiON/MERaLiON-2-10B), a
@@ -298,11 +301,18 @@ def _patch_logitsprocs_output_token_tracking():
     InputBatch.__init__ = _patched_init
 ```
 
+**This bug is not MERaLiON-specific.** Any vLLM V1 entry-point logits
+processor that depends on output token history (i.e. returns
+`is_argmax_invariant() = False`) will silently receive `-1` placeholders
+when all penalties are neutral. If you maintain a vLLM logits processor
+plugin, check whether your processor reads output tokens — if it does,
+you likely need this patch or the upstream fix.
+
 **Caveat**: this patches a private class. The `hasattr` guard fails silently if
 the attribute is removed. The proper upstream fix is to re-evaluate the flag *after*
 `build_logitsprocs()` returns, using
-`bool(logitsprocs.non_argmax_invariant)`. We plan to file this as a vLLM
-issue.
+`bool(logitsprocs.non_argmax_invariant)`. We're preparing an upstream
+PR to fix this in vLLM.
 
 With this patch, all 6 vLLM versions (0.12.0–0.16.0) pass full-dataset ASR
 evaluation (1,575 samples, 7 datasets, 4 languages) with stable WER (±0.001)
@@ -317,7 +327,12 @@ After this incident, we built an automated matrix runner that, for every
 unit tests + full ASR evaluation, and tears down — including force-killing
 orphaned `VLLM::*` processes that survive the parent.
 
-All tested against `transformers==4.57.6` on H100 (TP=1).
+All tested against `transformers==4.57.6` on H100 (TP=1). The full
+evaluation covers 1,575 samples across 7 datasets and 4 languages
+(English, Chinese, Malay, Tamil). Three representative datasets shown
+below; all 7 pass with WER within threshold on every version. Full
+results in the
+[repository](https://github.com/YingxuH/vllm_plugin).
 
 | vLLM | English (n=384) | Chinese (n=206) | Tamil (n=184) | Status |
 |------|----------------|----------------|--------------|--------|
