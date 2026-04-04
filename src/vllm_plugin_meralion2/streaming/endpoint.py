@@ -326,7 +326,7 @@ async def streaming_asr_endpoint(ws: WebSocket) -> None:
                         active_audio, prefix,
                     )
                 except Exception as exc:
-                    logger.error("Session %s engine error: %s", sid, exc)
+                    logger.exception("Session %s engine error: %s", sid, exc)
                     await ws.send_json(
                         ErrorResponse(
                             message=f"Engine error: {exc}",
