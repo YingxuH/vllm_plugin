@@ -127,52 +127,47 @@ def _get_tokenizer():
     return tok
 
 
-def _get_prompt_token_ids(prefix: Optional[str]) -> list[int]:
-    """Build prompt token IDs for a transcription request.
+def _build_prompt_text(prefix: Optional[str]) -> str:
+    """Build the full chat-templated prompt text for transcription.
 
-    Applies the chat template and caches the static portion.
-    Returns the full prompt_token_ids list ready for the engine.
+    Uses the tokenizer's chat template to produce the exact format
+    the model expects.  The ``<SpeechHere>`` placeholder is left in
+    the text so vLLM's multimodal processor can find and expand it.
+
+    Results are cached for the static portions.
     """
     tokenizer = _get_tokenizer()
 
-    # Cache the static user-turn token IDs (everything before <SpeechHere>
-    # and after, plus the assistant header).
     cache = _engine_state.get("_prompt_cache")
     if cache is None:
         prompt_template = _engine_state.get(
             "prompt_template", "Transcribe the following audio."
         )
-        # Build a minimal conversation and apply the chat template
         user_text = (
             f"Instruction: {prompt_template} \n"
             "Follow the text instruction based on the following audio: <SpeechHere>"
         )
-        # Tokenize the user turn + assistant header
-        messages = [{"role": "user", "content": user_text}]
-        full_text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True,
+        # Render with generation prompt (no prefix)
+        messages_no_prefix = [{"role": "user", "content": user_text}]
+        base_text = tokenizer.apply_chat_template(
+            messages_no_prefix, tokenize=False, add_generation_prompt=True,
         )
-        # Split at <SpeechHere> to find the audio placeholder position
-        parts = full_text.split("<SpeechHere>")
-        before_ids = tokenizer.encode(parts[0], add_special_tokens=False)
-        after_ids = tokenizer.encode(parts[1], add_special_tokens=False) if len(parts) > 1 else []
-        cache = {"before": before_ids, "after": after_ids}
+        cache = {"base_text": base_text, "user_text": user_text}
         _engine_state["_prompt_cache"] = cache
 
-    # Build the full prompt: before + speech_tokens + after + optional prefix
-    # The speech_token_id (255999) placeholder will be replaced by vLLM's
-    # multimodal processor with actual audio embeddings.
-    # Number of speech tokens is determined by audio length — we use a
-    # placeholder count here and let the engine's mm processor handle it.
-    # Actually, we set a single <SpeechHere> token and let vLLM expand it.
-    speech_token_id = 255999
-    prompt_ids = cache["before"] + [speech_token_id] + cache["after"]
+    if prefix is None:
+        return cache["base_text"]
 
-    if prefix is not None:
-        prefix_ids = tokenizer.encode(prefix, add_special_tokens=False)
-        prompt_ids = prompt_ids + prefix_ids
-
-    return prompt_ids
+    # With prefix: apply chat template with continue_final_message
+    messages = [
+        {"role": "user", "content": cache["user_text"]},
+        {"role": "assistant", "content": prefix},
+    ]
+    return tokenizer.apply_chat_template(
+        messages, tokenize=False,
+        add_generation_prompt=False,
+        continue_final_message=True,
+    )
 
 
 async def _transcribe_via_engine(
@@ -193,16 +188,15 @@ async def _transcribe_via_engine(
 
     Returns ``(text, completion_tokens)``.
     """
-    from vllm.inputs import TokensPrompt
+    from vllm.inputs import TextPrompt
     from vllm.sampling_params import SamplingParams
 
     engine = _get_engine_client()
-    tokenizer = _get_tokenizer()
 
-    prompt_ids = _get_prompt_token_ids(prefix)
+    prompt_text = _build_prompt_text(prefix)
 
-    prompt = TokensPrompt(
-        prompt_token_ids=prompt_ids,
+    prompt = TextPrompt(
+        prompt=prompt_text,
         multi_modal_data={"audio": audio},
     )
 
@@ -372,6 +366,58 @@ async def streaming_asr_endpoint(ws: WebSocket) -> None:
 
 
 # ── Health endpoint ──────────────────────────────────────────────────
+
+# ── REST endpoint: direct engine transcription (no chat handler) ─────
+
+@router.post("/v1/transcribe_direct")
+async def transcribe_direct_endpoint(request_body: dict) -> dict:
+    """Direct-to-engine transcription endpoint.
+
+    Accepts JSON with ``audio_url`` (data:audio/wav;base64,...) and
+    optional ``prefix`` for continuation.  Calls the engine directly
+    via ``TextPrompt``, bypassing the chat completion handler.
+
+    This avoids the event-loop serialization of JSON/base64/WAV parsing
+    that causes ~150ms gap at 8 concurrent workers.
+    """
+    audio_url = request_body.get("audio_url", "")
+    prefix = request_body.get("prefix")
+    temperature = request_body.get("temperature", 0.0)
+    max_tokens = request_body.get("max_tokens", 512)
+
+    if not audio_url:
+        return {"error": "Missing audio_url"}
+
+    # Decode the data URL to numpy array (we do this once, in-process)
+    try:
+        audio = _decode_audio_url(audio_url)
+    except Exception as exc:
+        return {"error": f"Bad audio: {exc}"}
+
+    try:
+        text, comp_tokens = await _transcribe_via_engine(
+            audio, prefix, temperature=temperature, max_tokens=max_tokens,
+        )
+    except Exception as exc:
+        logger.error("transcribe_direct error: %s", exc)
+        return {"error": str(exc)}
+
+    return {"text": text, "completion_tokens": comp_tokens}
+
+
+def _decode_audio_url(audio_url: str) -> np.ndarray:
+    """Decode a data:audio/wav;base64,... URL to float32 numpy array."""
+    import wave
+
+    b64_data = audio_url.split(",", 1)[1]
+    wav_bytes = base64.b64decode(b64_data)
+    buf = io.BytesIO(wav_bytes)
+    with wave.open(buf, "rb") as wf:
+        frames = wf.readframes(wf.getnframes())
+        sr = wf.getframerate()
+    pcm = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32767.0
+    return pcm
+
 
 @router.get("/v1/streaming_asr/health")
 async def streaming_asr_health() -> dict:
