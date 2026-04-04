@@ -95,7 +95,85 @@ def _encode_audio_url(audio: np.ndarray, sr: int = 16_000) -> str:
     return f"data:audio/wav;base64,{b64}"
 
 
-# ── Transcription via vLLM engine ────────────────────────────────────
+# ── Transcription via vLLM engine (direct, no chat handler) ──────────
+
+def _get_engine_client():
+    """Lazily resolve the vLLM engine client."""
+    client = _engine_state.get("engine_client")
+    if client is not None:
+        return client
+    app = _engine_state.get("app")
+    if app is not None:
+        client = getattr(app.state, "engine_client", None)
+        if client is not None:
+            _engine_state["engine_client"] = client
+            return client
+    raise RuntimeError("Streaming ASR endpoint not initialized (no engine_client)")
+
+
+def _get_tokenizer():
+    """Lazily resolve and cache the tokenizer."""
+    tok = _engine_state.get("_tokenizer")
+    if tok is not None:
+        return tok
+    app = _engine_state.get("app")
+    if app is None:
+        raise RuntimeError("No app in engine state")
+    serving = getattr(app.state, "openai_serving_chat", None)
+    if serving is None:
+        raise RuntimeError("No openai_serving_chat in app state")
+    tok = serving.renderer.tokenizer
+    _engine_state["_tokenizer"] = tok
+    return tok
+
+
+def _get_prompt_token_ids(prefix: Optional[str]) -> list[int]:
+    """Build prompt token IDs for a transcription request.
+
+    Applies the chat template and caches the static portion.
+    Returns the full prompt_token_ids list ready for the engine.
+    """
+    tokenizer = _get_tokenizer()
+
+    # Cache the static user-turn token IDs (everything before <SpeechHere>
+    # and after, plus the assistant header).
+    cache = _engine_state.get("_prompt_cache")
+    if cache is None:
+        prompt_template = _engine_state.get(
+            "prompt_template", "Transcribe the following audio."
+        )
+        # Build a minimal conversation and apply the chat template
+        user_text = (
+            f"Instruction: {prompt_template} \n"
+            "Follow the text instruction based on the following audio: <SpeechHere>"
+        )
+        # Tokenize the user turn + assistant header
+        messages = [{"role": "user", "content": user_text}]
+        full_text = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True,
+        )
+        # Split at <SpeechHere> to find the audio placeholder position
+        parts = full_text.split("<SpeechHere>")
+        before_ids = tokenizer.encode(parts[0], add_special_tokens=False)
+        after_ids = tokenizer.encode(parts[1], add_special_tokens=False) if len(parts) > 1 else []
+        cache = {"before": before_ids, "after": after_ids}
+        _engine_state["_prompt_cache"] = cache
+
+    # Build the full prompt: before + speech_tokens + after + optional prefix
+    # The speech_token_id (255999) placeholder will be replaced by vLLM's
+    # multimodal processor with actual audio embeddings.
+    # Number of speech tokens is determined by audio length — we use a
+    # placeholder count here and let the engine's mm processor handle it.
+    # Actually, we set a single <SpeechHere> token and let vLLM expand it.
+    speech_token_id = 255999
+    prompt_ids = cache["before"] + [speech_token_id] + cache["after"]
+
+    if prefix is not None:
+        prefix_ids = tokenizer.encode(prefix, add_special_tokens=False)
+        prompt_ids = prompt_ids + prefix_ids
+
+    return prompt_ids
+
 
 async def _transcribe_via_engine(
     audio: np.ndarray,
@@ -107,64 +185,46 @@ async def _transcribe_via_engine(
     temperature: float = 0.0,
     max_tokens: int = 512,
 ) -> tuple[str, int]:
-    """Call the vLLM engine to transcribe audio.
+    """Call the vLLM engine directly with a TokensPrompt.
 
-    This builds a ``ChatCompletionRequest``-compatible dict and calls
-    the engine through the OpenAI serving handler, bypassing HTTP.
+    Bypasses the chat completion handler entirely — no JSON parsing,
+    no base64 encoding, no WAV wrapping. Sends raw numpy audio +
+    pre-built token IDs directly to ``engine_client.generate()``.
 
     Returns ``(text, completion_tokens)``.
     """
-    serving_chat = _engine_state.get("serving_chat")
-    # Lazy lookup: init_streaming_state may run before init_app_state sets
-    # openai_serving_chat.  Fall back to the app's live state.
-    if serving_chat is None:
-        app = _engine_state.get("app")
-        if app is not None:
-            serving_chat = getattr(app.state, "openai_serving_chat", None)
-            if serving_chat is not None:
-                _engine_state["serving_chat"] = serving_chat
-    if serving_chat is None:
-        raise RuntimeError("Streaming ASR endpoint not initialized (no serving_chat)")
+    from vllm.inputs import TokensPrompt
+    from vllm.sampling_params import SamplingParams
 
-    audio_url = _encode_audio_url(audio, sr)
+    engine = _get_engine_client()
+    tokenizer = _get_tokenizer()
 
-    messages: list[dict] = [
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": prompt_template},
-                {"type": "audio_url", "audio_url": {"url": audio_url}},
-            ],
-        }
-    ]
+    prompt_ids = _get_prompt_token_ids(prefix)
 
-    request_kwargs: dict[str, Any] = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "max_completion_tokens": max_tokens,
-    }
+    prompt = TokensPrompt(
+        prompt_token_ids=prompt_ids,
+        multi_modal_data={"audio": audio},
+    )
 
-    if prefix is not None:
-        messages.append({"role": "assistant", "content": prefix})
-        request_kwargs["continue_final_message"] = True
-        request_kwargs["add_generation_prompt"] = False
+    sampling_params = SamplingParams(
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
 
-    # Import here to avoid hard vLLM dependency at module level
-    try:
-        from vllm.entrypoints.openai.protocol import ChatCompletionRequest
-    except ImportError:
-        from vllm.entrypoints.openai.chat_completion.protocol import ChatCompletionRequest
+    request_id = f"stream-asr-{uuid4()}"
 
-    request = ChatCompletionRequest(**request_kwargs)
+    full_text = ""
+    comp_tokens = 0
+    async for output in engine.generate(
+        prompt=prompt,
+        sampling_params=sampling_params,
+        request_id=request_id,
+    ):
+        if output.outputs:
+            full_text = output.outputs[0].text
+            comp_tokens = len(output.outputs[0].token_ids)
 
-    # Call the serving handler directly (no HTTP)
-    response = await serving_chat.create_chat_completion(request, raw_request=None)
-
-    # Non-streaming response is a ChatCompletionResponse object
-    content = response.choices[0].message.content or ""
-    comp_tokens = response.usage.completion_tokens if response.usage else 0
-    return content, comp_tokens
+    return full_text, comp_tokens
 
 
 # ── WebSocket handler ────────────────────────────────────────────────
