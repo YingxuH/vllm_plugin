@@ -55,8 +55,8 @@ def _patch_streaming_asr_endpoint() -> None:
     if _orig_build_app is None:
         return  # vLLM version without build_app
 
-    def _patched_build_app(args, **kwargs):
-        app = _orig_build_app(args, **kwargs)
+    def _patched_build_app(*args, **kwargs):
+        app = _orig_build_app(*args, **kwargs)
         try:
             from vllm_plugin_meralion2.streaming.endpoint import (
                 register_streaming_asr,
@@ -64,11 +64,12 @@ def _patch_streaming_asr_endpoint() -> None:
             )
             register_streaming_asr(app)
             # Extract model name from args for the streaming endpoint
-            model_name = getattr(args, "served_model_name", None)
+            cli_args = args[0] if args else None
+            model_name = getattr(cli_args, "served_model_name", None)
             if isinstance(model_name, list) and model_name:
                 model_name = model_name[0]
             elif model_name is None:
-                model_name = getattr(args, "model", "")
+                model_name = getattr(cli_args, "model", "")
             init_streaming_state(app, model_name=model_name or "")
         except Exception as exc:
             import logging

@@ -115,6 +115,14 @@ async def _transcribe_via_engine(
     Returns ``(text, completion_tokens)``.
     """
     serving_chat = _engine_state.get("serving_chat")
+    # Lazy lookup: init_streaming_state may run before init_app_state sets
+    # openai_serving_chat.  Fall back to the app's live state.
+    if serving_chat is None:
+        app = _engine_state.get("app")
+        if app is not None:
+            serving_chat = getattr(app.state, "openai_serving_chat", None)
+            if serving_chat is not None:
+                _engine_state["serving_chat"] = serving_chat
     if serving_chat is None:
         raise RuntimeError("Streaming ASR endpoint not initialized (no serving_chat)")
 
@@ -143,7 +151,10 @@ async def _transcribe_via_engine(
         request_kwargs["add_generation_prompt"] = False
 
     # Import here to avoid hard vLLM dependency at module level
-    from vllm.entrypoints.openai.protocol import ChatCompletionRequest
+    try:
+        from vllm.entrypoints.openai.protocol import ChatCompletionRequest
+    except ImportError:
+        from vllm.entrypoints.openai.chat_completion.protocol import ChatCompletionRequest
 
     request = ChatCompletionRequest(**request_kwargs)
 
@@ -355,6 +366,7 @@ def init_streaming_state(
 
     serving_chat = getattr(app.state, "openai_serving_chat", None)
     _engine_state["serving_chat"] = serving_chat
+    _engine_state["app"] = app
     _engine_state["model_name"] = model_name
     _engine_state["prompt_template"] = prompt_template
 
