@@ -67,6 +67,7 @@ class MERaLiON2ProcessingInfo(BaseProcessingInfo):
         *,
         # Ignored in initialization
         sampling_rate: Optional[int] = None,
+        precomputed_mel: Optional[object] = None,
         **kwargs: object,
     ) -> MERaLiON2Processor:
         return self.ctx.get_hf_processor(MERaLiON2Processor, **kwargs)
@@ -76,6 +77,7 @@ class MERaLiON2ProcessingInfo(BaseProcessingInfo):
         *,
         # Ignored in initialization
         sampling_rate: Optional[int] = None,
+        **kwargs: object,
     ) -> WhisperFeatureExtractor:
         """Return the underlying Whisper feature extractor for audio processing."""
         hf_processor = self.get_hf_processor(sampling_rate=sampling_rate)
@@ -159,6 +161,51 @@ class MERaLiON2MultiModalProcessor(BaseMultiModalProcessor[MERaLiON2ProcessingIn
         speech_token_id = getattr(processor, "speech_token_index", 255999)
         output_chunk_size = getattr(processor, "fixed_speech_embeds_length", 100)
 
+        # ── Pre-computed mel features (streaming ASR optimization) ────
+        # When mm_kwargs contains "precomputed_mel", skip the feature
+        # extractor entirely.  The caller has already computed mel
+        # features (with optional caching) and provides them directly.
+        precomputed = mm_kwargs.get("precomputed_mel")
+        if precomputed is not None:
+            input_features = precomputed["input_features"]  # (n_chunks, 80, 3000)
+            attention_mask = precomputed["feature_attention_mask"]  # (n_chunks, 3000)
+
+            if not isinstance(input_features, torch.Tensor):
+                input_features = torch.tensor(input_features, dtype=torch.float32)
+            if not isinstance(attention_mask, torch.Tensor):
+                attention_mask = torch.tensor(attention_mask, dtype=torch.long)
+
+            n_chunks = input_features.shape[0]
+
+            # Tokenize the prompt text (handles <SpeechHere> expansion)
+            text = prompt
+            target_string = (
+                processor.speech_token
+                * output_chunk_size
+                * n_chunks
+            )
+            text = text.replace(processor.speech_token, target_string, 1)
+            text_input = processor.tokenizer(
+                text=[text], return_tensors="pt",
+                add_special_tokens=False, return_attention_mask=True,
+                padding=True,
+            )
+
+            results = BatchFeature({
+                "input_ids": text_input.input_ids,
+                "attention_mask": text_input.attention_mask,
+                "input_features": input_features,
+                "feature_attention_mask": attention_mask,
+            })
+
+            chunk_sizes = [1] * n_chunks if n_chunks > 1 else [n_chunks]
+            splitted_input_features = torch.split(input_features, chunk_sizes, dim=0)
+            splitted_feature_attention_mask = torch.split(attention_mask, chunk_sizes, dim=0)
+            results["input_features"] = splitted_input_features
+            results["feature_attention_mask"] = splitted_feature_attention_mask
+            return results
+
+        # ── Standard path: run WhisperFeatureExtractor ────────────────
         mm_kwargs = {
             **mm_kwargs,
             "sampling_rate": feature_extractor.sampling_rate,

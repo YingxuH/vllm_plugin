@@ -145,7 +145,8 @@ def _build_prompt_text(prefix: Optional[str]) -> str:
         )
         user_text = (
             f"Instruction: {prompt_template} \n"
-            "Follow the text instruction based on the following audio: <SpeechHere>"
+            "Follow the text instruction based on the following audio: "
+            "<SpeechHere>"
         )
         # Render with generation prompt (no prefix)
         messages_no_prefix = [{"role": "user", "content": user_text}]
@@ -170,6 +171,66 @@ def _build_prompt_text(prefix: Optional[str]) -> str:
     )
 
 
+def _get_feature_extractor():
+    """Lazily resolve and cache the WhisperFeatureExtractor."""
+    fe = _engine_state.get("_feature_extractor")
+    if fe is not None:
+        return fe
+    # Load directly from the model path (works in any process)
+    app = _engine_state.get("app")
+    if app is not None:
+        serving = getattr(app.state, "openai_serving_chat", None) or \
+                  getattr(app.state, "openai_serving_models", None)
+        if serving is not None:
+            try:
+                model_path = serving.model_config.model
+                from transformers.models.whisper.feature_extraction_whisper import WhisperFeatureExtractor
+                fe = WhisperFeatureExtractor.from_pretrained(model_path)
+                _engine_state["_feature_extractor"] = fe
+                _engine_state["_mel_chunk_size"] = fe.chunk_length * fe.sampling_rate
+                logger.info("Loaded WhisperFeatureExtractor from %s (sr=%d, mel=%d)",
+                            model_path, fe.sampling_rate, fe.feature_size)
+                return fe
+            except Exception as exc:
+                logger.warning("Failed to load feature extractor: %s", exc)
+    return None
+
+
+def _compute_mel_features(audio: np.ndarray, sr: int = 16_000):
+    """Pre-compute mel-spectrogram features with the WhisperFeatureExtractor.
+
+    Returns (input_features, feature_attention_mask) as numpy arrays,
+    or None if the feature extractor is not available.
+    """
+    fe = _get_feature_extractor()
+    if fe is None:
+        return None
+
+    chunk_size = _engine_state.get("_mel_chunk_size", 30 * 16000)
+    do_normalize = _engine_state.get("_do_normalize", fe.do_normalize if hasattr(fe, 'do_normalize') else True)
+
+    # Split into chunks (same logic as MERaLiON2Processor)
+    if len(audio) <= chunk_size:
+        chunks = [audio]
+    else:
+        n = ((len(audio) - 1) // chunk_size) + 1
+        chunks = [audio[i * chunk_size:(i + 1) * chunk_size] for i in range(n)]
+
+    result = fe(
+        chunks,
+        sampling_rate=sr,
+        return_tensors="np",
+        return_attention_mask=True,
+        padding="max_length",
+        do_normalize=do_normalize,
+    )
+
+    return {
+        "input_features": result["input_features"],
+        "feature_attention_mask": result.get("attention_mask", result.get("feature_attention_mask")),
+    }
+
+
 async def _transcribe_via_engine(
     audio: np.ndarray,
     prefix: Optional[str],
@@ -180,25 +241,41 @@ async def _transcribe_via_engine(
     temperature: float = 0.0,
     max_tokens: int = 512,
 ) -> tuple[str, int]:
-    """Call the vLLM engine directly with a TokensPrompt.
+    """Call the vLLM engine directly, with pre-computed mel features.
 
-    Bypasses the chat completion handler entirely — no JSON parsing,
-    no base64 encoding, no WAV wrapping. Sends raw numpy audio +
-    pre-built token IDs directly to ``engine_client.generate()``.
+    Pre-computes mel-spectrogram features in the WebSocket handler
+    (outside the event loop's add_request path), then passes them
+    to the engine via mm_processor_kwargs.  The multimodal processor
+    skips the WhisperFeatureExtractor and uses the pre-computed
+    features directly.
 
     Returns ``(text, completion_tokens)``.
     """
     from vllm.inputs import TextPrompt
     from vllm.sampling_params import SamplingParams
+    import asyncio
 
     engine = _get_engine_client()
 
     prompt_text = _build_prompt_text(prefix)
 
-    prompt = TextPrompt(
-        prompt=prompt_text,
-        multi_modal_data={"audio": audio},
-    )
+    # Pre-compute mel features in a thread pool (off the event loop)
+    loop = asyncio.get_running_loop()
+    mel = await loop.run_in_executor(None, _compute_mel_features, audio, sr)
+
+    if mel is not None:
+        # Pass pre-computed features — processor skips feature extractor
+        prompt = TextPrompt(
+            prompt=prompt_text,
+            multi_modal_data={"audio": audio},
+            mm_processor_kwargs={"precomputed_mel": mel},
+        )
+    else:
+        # Fallback: let the processor compute mel (standard path)
+        prompt = TextPrompt(
+            prompt=prompt_text,
+            multi_modal_data={"audio": audio},
+        )
 
     sampling_params = SamplingParams(
         temperature=temperature,
