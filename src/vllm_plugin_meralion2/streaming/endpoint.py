@@ -277,6 +277,9 @@ async def streaming_asr_endpoint(ws: WebSocket) -> None:
                 break
 
             # ── audio_chunk ──────────────────────────────────────
+            # Append audio to server-side buffer, then optionally
+            # transcribe.  The client controls all streaming logic
+            # (prefix, step types, display cleaning).
             if isinstance(msg, AudioChunkMessage):
                 if session is None:
                     await ws.send_json(
@@ -298,38 +301,29 @@ async def streaming_asr_endpoint(ws: WebSocket) -> None:
                     continue
 
                 session.append_audio(audio_f32)
-                step_info = session.advance_step()
-                is_append = step_info["is_append"]
-                step = step_info["step"]
 
-                session.trim_if_needed()
+                # If the message includes a "transcribe" flag, run
+                # transcription on the current buffer.  Otherwise
+                # just acknowledge the append (for batching chunks).
+                prefix = raw_msg.get("prefix")  # client-managed prefix
+                audio_start = raw_msg.get("audio_start", 0.0)  # client-managed trim point
+                start_sample = int(audio_start * session.config.sample_rate)
 
-                active_audio = session.get_active_audio()
+                active_audio = session.audio_buffer[start_sample:] \
+                    if start_sample < session.total_samples \
+                    else np.array([], dtype=np.float32)
+
                 if len(active_audio) == 0:
-                    await ws.send_json(
-                        TranscriptResponse(
-                            text="",
-                            raw="",
-                            is_append=is_append,
-                            step=step,
-                            comp_tokens=0,
-                        ).model_dump()
-                    )
+                    await ws.send_json({
+                        "type": "transcript",
+                        "text": "",
+                        "comp_tokens": 0,
+                    })
                     continue
-
-                prefix_arg = session.prefix_raw or None
-                model = _engine_state.get("model_name", "")
-                prompt = _engine_state.get(
-                    "prompt_template", "Transcribe the following audio."
-                )
 
                 try:
                     raw_text, comp_tokens = await _transcribe_via_engine(
-                        active_audio,
-                        prefix_arg,
-                        sr=session.config.sample_rate,
-                        model=model,
-                        prompt_template=prompt,
+                        active_audio, prefix,
                     )
                 except Exception as exc:
                     logger.error("Session %s engine error: %s", sid, exc)
@@ -341,20 +335,11 @@ async def streaming_asr_endpoint(ws: WebSocket) -> None:
                     )
                     continue
 
-                if is_append:
-                    session.update_prefix(raw_text)
-
-                display_text = session.build_display_text(raw_text, is_append)
-
-                await ws.send_json(
-                    TranscriptResponse(
-                        text=display_text,
-                        raw=raw_text,
-                        is_append=is_append,
-                        step=step,
-                        comp_tokens=comp_tokens,
-                    ).model_dump()
-                )
+                await ws.send_json({
+                    "type": "transcript",
+                    "text": raw_text,
+                    "comp_tokens": comp_tokens,
+                })
 
     except WebSocketDisconnect:
         logger.info("Session %s disconnected", sid)
