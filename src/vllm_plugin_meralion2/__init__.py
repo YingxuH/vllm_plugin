@@ -36,6 +36,50 @@ def _patch_logitsprocs_output_token_tracking() -> None:
     InputBatch.__init__ = _patched_init
 
 
+def _patch_streaming_asr_endpoint() -> None:
+    """Monkey-patch vLLM's ``build_app`` to include the streaming ASR endpoint.
+
+    The patch wraps the original ``build_app`` function so that after
+    the FastAPI app is created with all standard routes, the streaming
+    ASR WebSocket route (``/v1/streaming_asr``) is attached.
+
+    This runs inside the vLLM process, sharing the engine and GPU with
+    ``/v1/chat/completions``.  The existing endpoint is unaffected.
+    """
+    try:
+        from vllm.entrypoints.openai import api_server
+    except ImportError:
+        return  # vLLM not installed or incompatible version
+
+    _orig_build_app = getattr(api_server, "build_app", None)
+    if _orig_build_app is None:
+        return  # vLLM version without build_app
+
+    def _patched_build_app(args, **kwargs):
+        app = _orig_build_app(args, **kwargs)
+        try:
+            from vllm_plugin_meralion2.streaming.endpoint import (
+                register_streaming_asr,
+                init_streaming_state,
+            )
+            register_streaming_asr(app)
+            # Extract model name from args for the streaming endpoint
+            model_name = getattr(args, "served_model_name", None)
+            if isinstance(model_name, list) and model_name:
+                model_name = model_name[0]
+            elif model_name is None:
+                model_name = getattr(args, "model", "")
+            init_streaming_state(app, model_name=model_name or "")
+        except Exception as exc:
+            import logging
+            logging.getLogger("vllm_plugin").warning(
+                "Failed to register streaming ASR endpoint: %s", exc,
+            )
+        return app
+
+    api_server.build_app = _patched_build_app
+
+
 def register() -> None:
     """Register MERaLiON2 model with vLLM's plugin system.
 
@@ -78,3 +122,4 @@ def register() -> None:
         )
 
     _patch_logitsprocs_output_token_tracking()
+    _patch_streaming_asr_endpoint()
